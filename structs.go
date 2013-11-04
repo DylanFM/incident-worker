@@ -76,9 +76,7 @@ type FeatureCollection struct {
 // Now non-Geojson marshalling stuff...
 
 type Incident struct {
-  Id string
   Title string
-  Link string
   IncidentUpdates []IncidentUpdate
 }
 

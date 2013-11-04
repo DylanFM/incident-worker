@@ -7,7 +7,6 @@ import (
 	"log"
   "os"
 	"path/filepath"
-  "regexp"
 )
 
 func main() {
@@ -28,8 +27,6 @@ func main() {
 
 	for _, filename := range matches {
 		contents, err := ioutil.ReadFile(filename)
-
-    fmt.Printf("Reading file %z\n", filename)
 
 		if err != nil {
 			log.Fatal(err)
@@ -60,43 +57,32 @@ func main() {
 
 			incident, _ := incidentFromFeature(*feature)
 
-			existingIncident, exists := incidents[incident.Id]
+			existingIncident, exists := incidents[incident.Title]
 			if exists {
-        fmt.Printf("Incident %z exists, appending updates\n", incident.Id)
-
         // Add the incident's update to the existing one
         existingIncident.IncidentUpdates = append(existingIncident.IncidentUpdates, incident.IncidentUpdates...)
       } else {
-        fmt.Printf("Incident %z is new\n", incident.Id)
-
         // Add the incident with update to the slice
-				incidents[incident.Id] = incident
+				incidents[incident.Title] = incident
 			}
-      fmt.Printf("num incidents %z\n", len(incidents))
 		}
 	}
 
-	fmt.Printf("incidents %z\n", incidents)
+  for _, incident := range incidents {
+    fmt.Printf("%s\t-\t %d updates\n", incident.Title, len(incident.IncidentUpdates))
+  }
+
+  fmt.Printf("%d incidents\n", len(incidents))
+
 }
 
 func incidentFromFeature(f Feature) (incident Incident, err error) {
   incident = Incident{}
 
-  incident.Link  = f.Properties.Link
   incident.Title = f.Properties.Title
 
   incidentUpdate, _ := incidentUpdateFromFeature(f) // The 1st update
   incident.IncidentUpdates = append(incident.IncidentUpdates, incidentUpdate)
-
-  // Get the Id from the link
-  re := regexp.MustCompile("=\\d+$")
-  id := re.FindString(incident.Link)
-
-  if len(id) == 0 {
-    log.Panicf("Can't get id from %z\n", incident.Link)
-  }
-
-  incident.Id = id
 
 	return
 }
