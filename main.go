@@ -59,12 +59,11 @@ func main() {
 
 			existingIncident, exists := incidents[incident.Title]
 			if exists {
-        // Add the incident's update to the existing one
-        existingIncident.IncidentUpdates = append(existingIncident.IncidentUpdates, incident.IncidentUpdates...)
-      } else {
-        // Add the incident with update to the slice
-				incidents[incident.Title] = incident
-			}
+        // Add the incident's update to the existing one, and assign to the latest incident
+        incident.IncidentUpdates = append(existingIncident.IncidentUpdates, incident.IncidentUpdates...)
+      }
+
+      incidents[incident.Title] = incident
 		}
 	}
 
