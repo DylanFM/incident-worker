@@ -7,6 +7,7 @@ import (
 	"log"
   "os"
 	"path/filepath"
+  "regexp"
 )
 
 func main() {
@@ -17,25 +18,27 @@ func main() {
 
   dir := os.Args[1]
 
-	matches, error := filepath.Glob(filepath.Join(dir, "*.json"))
+	matches, err := filepath.Glob(filepath.Join(dir, "*.json"))
 
-	if error != nil {
-		log.Fatal(error)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	var incidents = make(map[string]Incident)
 
 	for _, filename := range matches {
-		contents, error := ioutil.ReadFile(filename)
+		contents, err := ioutil.ReadFile(filename)
 
-		if error != nil {
-			log.Fatal(error)
+    fmt.Printf("Reading file %z\n", filename)
+
+		if err != nil {
+			log.Fatal(err)
 		}
 
 		var features FeatureCollection
-		err := json.Unmarshal(contents, &features)
-		if err != nil {
-			log.Fatal(err)
+		jErr := json.Unmarshal(contents, &features)
+		if jErr != nil {
+			log.Fatal(jErr)
 		}
 
 		for i := range features.Features {
@@ -57,12 +60,19 @@ func main() {
 
 			incident, _ := incidentFromFeature(*feature)
 
-			// Unless incidents already includes this incident, add it to the incidents slice
-			_, exists := incidents[incident.Guid]
+			existingIncident, exists := incidents[incident.Id]
+			if exists {
+        fmt.Printf("Incident %z exists, appending updates\n", incident.Id)
 
-			if !exists {
-				incidents[incident.Guid] = incident
+        // Add the incident's update to the existing one
+        existingIncident.IncidentUpdates = append(existingIncident.IncidentUpdates, incident.IncidentUpdates...)
+      } else {
+        fmt.Printf("Incident %z is new\n", incident.Id)
+
+        // Add the incident with update to the slice
+				incidents[incident.Id] = incident
 			}
+      fmt.Printf("num incidents %z\n", len(incidents))
 		}
 	}
 
@@ -71,7 +81,34 @@ func main() {
 
 func incidentFromFeature(f Feature) (incident Incident, err error) {
   incident = Incident{}
-	incident.Guid = f.Properties.Guid
+
+  incident.Link  = f.Properties.Link
+  incident.Title = f.Properties.Title
+
+  incidentUpdate, _ := incidentUpdateFromFeature(f) // The 1st update
+  incident.IncidentUpdates = append(incident.IncidentUpdates, incidentUpdate)
+
+  // Get the Id from the link
+  re := regexp.MustCompile("=\\d+$")
+  id := re.FindString(incident.Link)
+
+  if len(id) == 0 {
+    log.Panicf("Can't get id from %z\n", incident.Link)
+  }
+
+  incident.Id = id
 
 	return
 }
+
+func incidentUpdateFromFeature(f Feature) (incidentUpdate IncidentUpdate, err error) {
+  incidentUpdate = IncidentUpdate{}
+
+  incidentUpdate.Guid        = f.Properties.Guid
+  incidentUpdate.Category    = f.Properties.Category
+  incidentUpdate.Pubdate     = f.Properties.Pubdate
+  incidentUpdate.Description = f.Properties.Description
+
+  return
+}
+
