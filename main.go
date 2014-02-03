@@ -9,13 +9,7 @@ import (
 	"path/filepath"
 )
 
-func main() {
-
-  if len(os.Args) == 1 {
-    log.Panic("Specify a directory to search within")
-  }
-
-  dir := os.Args[1]
+func ImportFromDirectory(dir string) {
 
 	matches, err := filepath.Glob(filepath.Join(dir, "*.json"))
 
@@ -29,13 +23,15 @@ func main() {
 		contents, err := ioutil.ReadFile(filename)
 
 		if err != nil {
-			log.Fatal(err)
+      fmt.Printf("<%s>\t%s\n", filename, err)
+      continue
 		}
 
 		var features FeatureCollection
 		jErr := json.Unmarshal(contents, &features)
 		if jErr != nil {
-			log.Fatal(jErr)
+      fmt.Printf("<%s>\t%s\n", filename, jErr)
+      continue
 		}
 
 		for i := range features.Features {
@@ -49,10 +45,10 @@ func main() {
 			case "Polygon":
 				err = json.Unmarshal(feature.Geometry.Coordinates, &feature.Geometry.Polygon.Lines)
 			default:
-				log.Panicf("Unknown feature type: %z\n", feature.Type)
+        fmt.Printf("<%s> Unknown feature type: %z\n", filename, feature.Type)
 			}
 			if err != nil {
-				log.Fatal(err)
+        fmt.Printf("<%s> %s\n", filename, err)
 			}
 
 			incident, _ := incidentFromFeature(*feature)
@@ -95,5 +91,17 @@ func incidentUpdateFromFeature(f Feature) (incidentUpdate IncidentUpdate, err er
   incidentUpdate.Description = f.Properties.Description
 
   return
+}
+
+func main() {
+  if len(os.Args) == 1 {
+    log.Panic("Specify a directory to search within")
+  }
+
+  dir := os.Args[1]
+
+  fmt.Printf("Importing from %s", dir)
+
+  ImportFromDirectory(dir)
 }
 
