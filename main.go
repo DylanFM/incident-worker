@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-  "os"
+	"os"
 	"path/filepath"
 )
 
@@ -23,15 +23,15 @@ func ImportFromDirectory(dir string) {
 		contents, err := ioutil.ReadFile(filename)
 
 		if err != nil {
-      fmt.Printf("<%s>\t%s\n", filename, err)
-      continue
+			fmt.Printf("<%s>\t%s\n", filename, err)
+			continue
 		}
 
 		var features FeatureCollection
 		jErr := json.Unmarshal(contents, &features)
 		if jErr != nil {
-      fmt.Printf("<%s>\t%s\n", filename, jErr)
-      continue
+			fmt.Printf("<%s>\t%s\n", filename, jErr)
+			continue
 		}
 
 		for i := range features.Features {
@@ -45,63 +45,62 @@ func ImportFromDirectory(dir string) {
 			case "Polygon":
 				err = json.Unmarshal(feature.Geometry.Coordinates, &feature.Geometry.Polygon.Lines)
 			default:
-        fmt.Printf("<%s> Unknown feature type: %z\n", filename, feature.Type)
+				fmt.Printf("<%s> Unknown feature type: %z\n", filename, feature.Type)
 			}
 			if err != nil {
-        fmt.Printf("<%s> %s\n", filename, err)
+				fmt.Printf("<%s> %s\n", filename, err)
 			}
 
 			incident, _ := incidentFromFeature(*feature)
 
 			existingIncident, exists := incidents[incident.Title]
 			if exists {
-        // Add the incident's update to the existing one, and assign to the latest incident
-        incident.IncidentUpdates = append(existingIncident.IncidentUpdates, incident.IncidentUpdates...)
-      }
+				// Add the incident's update to the existing one, and assign to the latest incident
+				incident.IncidentUpdates = append(existingIncident.IncidentUpdates, incident.IncidentUpdates...)
+			}
 
-      incidents[incident.Title] = incident
+			incidents[incident.Title] = incident
 		}
 	}
 
-  for _, incident := range incidents {
-    fmt.Printf("%s\t-\t %d updates\n", incident.Title, len(incident.IncidentUpdates))
-  }
+	for _, incident := range incidents {
+		fmt.Printf("%s\t-\t %d updates\n", incident.Title, len(incident.IncidentUpdates))
+	}
 
-  fmt.Printf("%d incidents\n", len(incidents))
+	fmt.Printf("%d incidents\n", len(incidents))
 
 }
 
 func incidentFromFeature(f Feature) (incident Incident, err error) {
-  incident = Incident{}
+	incident = Incident{}
 
-  incident.Title = f.Properties.Title
+	incident.Title = f.Properties.Title
 
-  incidentUpdate, _ := incidentUpdateFromFeature(f) // The 1st update
-  incident.IncidentUpdates = append(incident.IncidentUpdates, incidentUpdate)
+	incidentUpdate, _ := incidentUpdateFromFeature(f) // The 1st update
+	incident.IncidentUpdates = append(incident.IncidentUpdates, incidentUpdate)
 
 	return
 }
 
 func incidentUpdateFromFeature(f Feature) (incidentUpdate IncidentUpdate, err error) {
-  incidentUpdate = IncidentUpdate{}
+	incidentUpdate = IncidentUpdate{}
 
-  incidentUpdate.Guid        = f.Properties.Guid
-  incidentUpdate.Category    = f.Properties.Category
-  incidentUpdate.Pubdate     = f.Properties.Pubdate
-  incidentUpdate.Description = f.Properties.Description
+	incidentUpdate.Guid = f.Properties.Guid
+	incidentUpdate.Category = f.Properties.Category
+	incidentUpdate.Pubdate = f.Properties.Pubdate
+	incidentUpdate.Description = f.Properties.Description
 
-  return
+	return
 }
 
 func main() {
-  if len(os.Args) == 1 {
-    log.Panic("Specify a directory to search within")
-  }
+	if len(os.Args) == 1 {
+		log.Panic("Specify a directory to search within")
+	}
 
-  dir := os.Args[1]
+	dir := os.Args[1]
 
-  fmt.Printf("Importing from %s", dir)
+	fmt.Printf("Importing from %s", dir)
 
-  ImportFromDirectory(dir)
+	ImportFromDirectory(dir)
 }
-
