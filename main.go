@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -71,12 +72,11 @@ func ImportFromDirectory(dir string) {
 		fmt.Printf("\n(%d) %s\n", len(incident.IncidentUpdates), incident.Title)
 
 		for _, update := range incident.IncidentUpdates {
-			fmt.Printf(" - <%s> %s - %s - %s\n", update.Guid, update.Pubdate, update.Category, update.Description)
+			fmt.Printf(" - <%s> %s - %x\n", update.Guid, update.Pubdate, update.Hash[0:7])
 		}
 	}
 
 	fmt.Printf("%d incidents\n", len(incidents))
-
 }
 
 func incidentFromFeature(f Feature) (incident Incident, err error) {
@@ -97,6 +97,11 @@ func incidentUpdateFromFeature(f Feature) (incidentUpdate IncidentUpdate, err er
 	incidentUpdate.Category = f.Properties.Category
 	incidentUpdate.Pubdate = f.Properties.Pubdate
 	incidentUpdate.Description = f.Properties.Description
+	// Generate hash of json representation of feature
+	s, _ := json.Marshal(f)
+	h := sha1.New()
+	h.Write([]byte(s))
+	incidentUpdate.Hash = fmt.Sprintf("%x", h)
 
 	return
 }
