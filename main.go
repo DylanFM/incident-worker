@@ -71,7 +71,7 @@ func ImportFromDirectory(dir string) {
 		fmt.Printf("\n(%d) %s\n", len(incident.IncidentUpdates), incident.Title)
 
 		for _, update := range incident.IncidentUpdates {
-			fmt.Printf(" - <%s> %s - %s\n", update.Guid, update.Pubdate, update.Category)
+			fmt.Printf(" - <%s> %s - %s - %s\n", update.Guid, update.Pubdate, update.Category, update.Description)
 		}
 	}
 
