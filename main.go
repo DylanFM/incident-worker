@@ -20,7 +20,7 @@ func ImportFromDirectory(dir string) {
 		log.Fatal(err)
 	}
 
-	var incidents = make(map[string]Incident)
+	var incidents = make(map[int]Incident)
 
 	for _, filename := range matches {
 		contents, err := ioutil.ReadFile(filename)
@@ -56,13 +56,13 @@ func ImportFromDirectory(dir string) {
 
 			incident, _ := incidentFromFeature(*feature)
 
-			existingIncident, exists := incidents[incident.Title]
+			existingIncident, exists := incidents[incident.Id]
 			if exists {
 				// Add the incident's update to the existing one, and assign to the latest incident
 				incident.IncidentUpdates = append(existingIncident.IncidentUpdates, incident.IncidentUpdates...)
 			}
 
-			incidents[incident.Title] = incident
+			incidents[incident.Id] = incident
 		}
 	}
 
@@ -75,13 +75,6 @@ func ImportFromDirectory(dir string) {
 
 		for _, update := range incident.IncidentUpdates {
 			fmt.Printf(" - <%s> %s - %x\n", update.Guid, update.Pubdate, update.Hash[0:7])
-
-			// See if the Id ever changes
-			s := strings.Split(update.Guid, ":")
-			id, _ := strconv.Atoi(s[len(s)-1])
-			if id != incident.Id {
-				log.Printf("Id mismatch %d should be %d", id, incident.Id)
-			}
 		}
 	}
 
