@@ -8,6 +8,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 func ImportFromDirectory(dir string) {
@@ -69,10 +71,17 @@ func ImportFromDirectory(dir string) {
 		// (no. updates) Title
 		// - <Guid> - Pubdate - Category
 		// - ...
-		fmt.Printf("\n(%d) %s\n", len(incident.IncidentUpdates), incident.Title)
+		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.IncidentUpdates), incident.Title)
 
 		for _, update := range incident.IncidentUpdates {
 			fmt.Printf(" - <%s> %s - %x\n", update.Guid, update.Pubdate, update.Hash[0:7])
+
+			// See if the Id ever changes
+			s := strings.Split(update.Guid, ":")
+			id, _ := strconv.Atoi(s[len(s)-1])
+			if id != incident.Id {
+				log.Printf("Id mismatch %d should be %d", id, incident.Id)
+			}
 		}
 	}
 
@@ -86,6 +95,10 @@ func incidentFromFeature(f Feature) (incident Incident, err error) {
 
 	incidentUpdate, _ := incidentUpdateFromFeature(f) // The 1st update
 	incident.IncidentUpdates = append(incident.IncidentUpdates, incidentUpdate)
+
+	// Take the integer at the end of the Guid to use as the Id
+	s := strings.Split(incidentUpdate.Guid, ":")
+	incident.Id, _ = strconv.Atoi(s[len(s)-1])
 
 	return
 }
