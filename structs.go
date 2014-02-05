@@ -77,7 +77,6 @@ type FeatureCollection struct {
 
 type Incident struct {
 	Id      int
-	Title   string
 	Reports []Report
 }
 
@@ -88,6 +87,8 @@ func (i *Incident) latestReport() Report {
 type Report struct {
 	Hash        string
 	Guid        string
+	Title       string
+	Link        string
 	Category    string
 	Pubdate     string
 	Description string

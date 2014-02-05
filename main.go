@@ -77,7 +77,7 @@ func ImportFromDirectory(dir string) {
 		// (no. reports) Title
 		// - <Guid> - Pubdate - Category
 		// - ...
-		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.Reports), incident.Title)
+		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.Reports), incident.latestReport().Title)
 
 		for _, report := range incident.Reports {
 			fmt.Printf("%s - %s, %s\n", report.Details["updated"], report.Details["size"], report.Details["status"])
@@ -89,8 +89,6 @@ func ImportFromDirectory(dir string) {
 
 func incidentFromFeature(f Feature) (incident Incident, err error) {
 	incident = Incident{}
-
-	incident.Title = f.Properties.Title
 
 	report, _ := reportFromFeature(f) // The 1st report
 	incident.Reports = append(incident.Reports, report)
@@ -112,6 +110,8 @@ func reportFromFeature(f Feature) (report Report, err error) {
 	report.Hash = fmt.Sprintf("%x", h)
 
 	report.Guid = f.Properties.Guid
+	report.Title = f.Properties.Title
+	report.Link = f.Properties.Link
 	report.Category = f.Properties.Category
 	report.Pubdate = f.Properties.Pubdate
 	report.Description = f.Properties.Description
