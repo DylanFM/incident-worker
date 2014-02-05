@@ -83,7 +83,11 @@ func ImportFromDirectory(dir string) {
 		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.Reports), incident.Title)
 
 		for _, report := range incident.Reports {
-			fmt.Printf("%s\t%s\t%s\t%s\n", report.Details["updated"], report.Details["size"], report.Details["status"], report.Details["type"])
+			gj, _ := json.Marshal(report.Geometry)
+			h := sha1.New()
+			h.Write([]byte(gj))
+			geohash := fmt.Sprintf("%x", h)
+			fmt.Printf("%s - %s, %s - %s\n", report.Details["updated"], report.Details["size"], report.Details["status"], geohash)
 		}
 	}
 
