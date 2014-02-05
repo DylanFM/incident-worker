@@ -58,8 +58,8 @@ func ImportFromDirectory(dir string) {
 
 			existingIncident, exists := incidents[incident.Id]
 			if exists {
-				// Add the incident's update to the existing one, and assign to the latest incident
-				incident.IncidentUpdates = append(existingIncident.IncidentUpdates, incident.IncidentUpdates...)
+				// Add the incident's report to the existing one, and assign to the latest incident
+				incident.Reports = append(existingIncident.Reports, incident.Reports...)
 			}
 
 			incidents[incident.Id] = incident
@@ -67,14 +67,14 @@ func ImportFromDirectory(dir string) {
 	}
 
 	for _, incident := range incidents {
-		// Print out some details about the incident and its updates
-		// (no. updates) Title
+		// Print out some details about the incident and its reports
+		// (no. reports) Title
 		// - <Guid> - Pubdate - Category
 		// - ...
-		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.IncidentUpdates), incident.Title)
+		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.Reports), incident.Title)
 
-		for _, update := range incident.IncidentUpdates {
-			fmt.Printf(" - <%s> %s - %x\n", update.Guid, update.Pubdate, update.Hash[0:7])
+		for _, report := range incident.Reports {
+			fmt.Printf(" - <%s> %s - %x - %s\n", report.Guid, report.Pubdate, report.Hash[0:7], report.Description)
 		}
 	}
 
@@ -86,28 +86,28 @@ func incidentFromFeature(f Feature) (incident Incident, err error) {
 
 	incident.Title = f.Properties.Title
 
-	incidentUpdate, _ := incidentUpdateFromFeature(f) // The 1st update
-	incident.IncidentUpdates = append(incident.IncidentUpdates, incidentUpdate)
+	report, _ := reportFromFeature(f) // The 1st report
+	incident.Reports = append(incident.Reports, report)
 
 	// Take the integer at the end of the Guid to use as the Id
-	s := strings.Split(incidentUpdate.Guid, ":")
+	s := strings.Split(report.Guid, ":")
 	incident.Id, _ = strconv.Atoi(s[len(s)-1])
 
 	return
 }
 
-func incidentUpdateFromFeature(f Feature) (incidentUpdate IncidentUpdate, err error) {
-	incidentUpdate = IncidentUpdate{}
+func reportFromFeature(f Feature) (report Report, err error) {
+	report = Report{}
 
-	incidentUpdate.Guid = f.Properties.Guid
-	incidentUpdate.Category = f.Properties.Category
-	incidentUpdate.Pubdate = f.Properties.Pubdate
-	incidentUpdate.Description = f.Properties.Description
+	report.Guid = f.Properties.Guid
+	report.Category = f.Properties.Category
+	report.Pubdate = f.Properties.Pubdate
+	report.Description = f.Properties.Description
 	// Generate hash of json representation of feature
 	s, _ := json.Marshal(f)
 	h := sha1.New()
 	h.Write([]byte(s))
-	incidentUpdate.Hash = fmt.Sprintf("%x", h)
+	report.Hash = fmt.Sprintf("%x", h)
 
 	return
 }

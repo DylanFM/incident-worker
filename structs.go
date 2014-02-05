@@ -76,12 +76,12 @@ type FeatureCollection struct {
 // Now non-Geojson marshalling stuff...
 
 type Incident struct {
-	Id              int
-	Title           string
-	IncidentUpdates []IncidentUpdate
+	Id      int
+	Title   string
+	Reports []Report
 }
 
-type IncidentUpdate struct {
+type Report struct {
 	Guid        string
 	Category    string
 	Pubdate     string
