@@ -82,23 +82,8 @@ func ImportFromDirectory(dir string) {
 		// - ...
 		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.Reports), incident.Title)
 
-		for k, report := range incident.Reports {
-			pubdateChanged := false
-			updatedChanged := false
-			hashChanged := false
-			if k > 0 {
-				prevReport := incident.Reports[k-1]
-				// If this report's Pubdate, updated or hash differ from the previous report, I want to display this
-				// If they always only change at the same time, then we have a consistent way of knowing if there's an update or not
-				// Otherwise, the data is changing a bit inconsistently.
-				pubdateChanged = prevReport.Pubdate != report.Pubdate
-				updatedChanged = prevReport.Details["updated"] != report.Details["updated"]
-				hashChanged = prevReport.Hash != report.Hash
-			}
-			if pubdateChanged || updatedChanged || hashChanged {
-				fmt.Printf("Pubdate:\t%t\tUpdated:\t%t\tHash:\t%t\t\n", pubdateChanged, updatedChanged, hashChanged)
-			}
-			fmt.Printf(" - <%s> %s - %s - %x\n", report.Guid, report.Pubdate, report.Details["updated"], report.Hash[0:7])
+		for _, report := range incident.Reports {
+			fmt.Printf("%s\t%s\t%s\t%s\n", report.Details["updated"], report.Details["size"], report.Details["status"], report.Details["type"])
 		}
 	}
 
