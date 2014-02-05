@@ -59,6 +59,14 @@ func ImportFromDirectory(dir string) {
 
 			existingIncident, exists := incidents[incident.Id]
 			if exists {
+				// Get the current report
+				current := existingIncident.Reports[len(existingIncident.Reports)-1]
+				latest := incident.Reports[len(incident.Reports)-1]
+				// See if the current report for the existing incident has the same hash of data as this latest report
+				if current.Hash == latest.Hash {
+					continue // Report hasn't changed, so move on
+				}
+
 				// Add the incident's report to the existing one, and assign to the latest incident
 				incident.Reports = append(existingIncident.Reports, incident.Reports...)
 			}
