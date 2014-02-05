@@ -82,10 +82,10 @@ type Incident struct {
 }
 
 type Report struct {
+	Hash        string
 	Guid        string
 	Category    string
 	Pubdate     string
 	Description string
-	Hash        string
-	// TODO add geometry
+	Details     map[string]string
 }

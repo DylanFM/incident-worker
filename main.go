@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -74,7 +75,7 @@ func ImportFromDirectory(dir string) {
 		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.Reports), incident.Title)
 
 		for _, report := range incident.Reports {
-			fmt.Printf(" - <%s> %s - %x - %s\n", report.Guid, report.Pubdate, report.Hash[0:7], report.Description)
+			fmt.Printf(" - <%s> %s - %x - %s\n", report.Guid, report.Pubdate, report.Hash[0:7], report.Details)
 		}
 	}
 
@@ -99,15 +100,45 @@ func incidentFromFeature(f Feature) (incident Incident, err error) {
 func reportFromFeature(f Feature) (report Report, err error) {
 	report = Report{}
 
-	report.Guid = f.Properties.Guid
-	report.Category = f.Properties.Category
-	report.Pubdate = f.Properties.Pubdate
-	report.Description = f.Properties.Description
 	// Generate hash of json representation of feature
 	s, _ := json.Marshal(f)
 	h := sha1.New()
 	h.Write([]byte(s))
 	report.Hash = fmt.Sprintf("%x", h)
+
+	report.Guid = f.Properties.Guid
+	report.Category = f.Properties.Category
+	report.Pubdate = f.Properties.Pubdate
+	report.Description = f.Properties.Description
+
+	report.Details = make(map[string]string)
+	// Make more use of the description
+	// We've got a string like this:
+	// ALERT LEVEL: Not Applicable<br />LOCATION: Australian Native Landscapes, Snowy Mountains Highway, Tumut<br />COUNCIL AREA: Tumut<br />STATUS: under control<br />TYPE: Tip Refuse fire<br />FIRE: Yes<br />SIZE: 0 ha<br />RESPONSIBLE AGENCY: Rural Fire Service<br />UPDATED: 5 Feb 2014 08:58
+	// Split by <br />
+	d := strings.Split(report.Description, "<br />")
+	// This is for the KEY: Value strings
+	re := regexp.MustCompile(`^([\w\s]+):\s(.*)`)
+	whitespaceRe := regexp.MustCompile(`\s+`)
+	for _, v := range d {
+		r := re.FindAllStringSubmatch(v, -1)
+		if len(r) == 1 {
+			m := r[0]
+			if len(m) == 3 {
+				label := strings.ToLower(m[1])
+				// Maybe unecessary, but I'd like to have no whitespace in the label
+				label = whitespaceRe.ReplaceAllString(label, "_")
+				report.Details[label] = m[2]
+				// } else {
+				// We're expecting 3 matches - the initial string, the key and the value
+				// log.Panicf("%d - %s", len(m), m)
+			}
+			// } else {
+			// Well, there isn't a match which means there's some random text at the end.
+			// This is a chunk of text that's added onto the description
+			// log.Panicf("No matches %d - %s (from %s)", len(r), r, v)
+		}
+	}
 
 	return
 }
