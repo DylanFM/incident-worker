@@ -81,6 +81,10 @@ type Incident struct {
 	Reports []Report
 }
 
+func (i *Incident) latestReport() Report {
+	return i.Reports[len(i.Reports)-1]
+}
+
 type Report struct {
 	Hash        string
 	Guid        string
