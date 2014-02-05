@@ -88,4 +88,5 @@ type Report struct {
 	Pubdate     string
 	Description string
 	Details     map[string]string
+	Geometry    Geometry
 }

@@ -118,6 +118,7 @@ func reportFromFeature(f Feature) (report Report, err error) {
 	report.Category = f.Properties.Category
 	report.Pubdate = f.Properties.Pubdate
 	report.Description = f.Properties.Description
+	report.Geometry = f.Geometry
 
 	report.Details = make(map[string]string)
 	// Make more use of the description
