@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -93,9 +92,7 @@ func incidentFromFeature(f Feature) (incident Incident, err error) {
 	report, _ := reportFromFeature(f) // The 1st report
 	incident.Reports = append(incident.Reports, report)
 
-	// Take the integer at the end of the Guid to use as the Id
-	s := strings.Split(report.Guid, ":")
-	incident.Id, _ = strconv.Atoi(s[len(s)-1])
+	incident.Id = report.Id()
 
 	return
 }

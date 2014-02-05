@@ -1,6 +1,8 @@
 package main
 
 import "encoding/json"
+import "strconv"
+import "strings"
 
 // {
 //   "type": "FeatureCollection",
@@ -94,4 +96,11 @@ type Report struct {
 	Description string
 	Details     map[string]string
 	Geometry    Geometry
+}
+
+func (r *Report) Id() int {
+	// Take the integer at the end of the Guid to use as the Id
+	s := strings.Split(r.Guid, ":")
+	id, _ := strconv.Atoi(s[len(s)-1])
+	return id
 }
