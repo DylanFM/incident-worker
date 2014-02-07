@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 func ImportFromDirectory(dir string) {
@@ -30,14 +31,12 @@ func ImportFromDirectory(dir string) {
 			continue
 		}
 
-		count, err := ImportJson(contents, incidents)
+		_, iErr := ImportJson(contents, incidents)
 
-		if err != nil {
-			fmt.Printf("<%s>\t%s\n", filename, err)
+		if iErr != nil {
+			fmt.Printf("<%s>\t%s\n", filename, iErr)
 			continue
 		}
-
-		fmt.Printf("<%s>\t%d items\n", filename, count)
 	}
 
 	// For now, report on what was imported into memory
@@ -49,7 +48,7 @@ func ImportFromDirectory(dir string) {
 		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.Reports), incident.latestReport().Title)
 
 		for _, report := range incident.Reports {
-			fmt.Printf("%s - %s, %s\n", report.Details["updated"], report.Details["size"], report.Details["status"])
+			fmt.Printf("%s - %s, %s\n", report.Updated.Format("15:04 Mon Jan 2 2006"), report.Details["size"], report.Details["status"])
 		}
 	}
 
@@ -125,9 +124,11 @@ func reportFromFeature(f Feature) (report Report, err error) {
 	report.Title = f.Properties.Title
 	report.Link = f.Properties.Link
 	report.Category = f.Properties.Category
-	report.Pubdate = f.Properties.Pubdate
 	report.Description = f.Properties.Description
 	report.Geometry = f.Geometry
+	// Pubdate should be of type time
+	pubdateFormat := "2006/01/02 15:04:05-07"
+	report.Pubdate, _ = time.Parse(pubdateFormat, f.Properties.Pubdate)
 
 	report.Details = make(map[string]string)
 	// Make more use of the description
@@ -147,9 +148,6 @@ func reportFromFeature(f Feature) (report Report, err error) {
 				// Maybe unecessary, but I'd like to have no whitespace in the label
 				label = whitespaceRe.ReplaceAllString(label, "_")
 				report.Details[label] = m[2]
-				// } else {
-				// We're expecting 3 matches - the initial string, the key and the value
-				// log.Panicf("%d - %s", len(m), m)
 			}
 			// } else {
 			// Well, there isn't a match which means there's some random text at the end.
@@ -157,6 +155,11 @@ func reportFromFeature(f Feature) (report Report, err error) {
 			// log.Panicf("No matches %d - %s (from %s)", len(r), r, v)
 		}
 	}
+	// Updated details should be of type time
+	// Pull updated detail into the struct since it's time.Time
+	loc, _ := time.LoadLocation("Australia/Sydney")
+	updatedFormat := "2 Jan 2006 15:04"
+	report.Updated, _ = time.ParseInLocation(updatedFormat, report.Details["updated"], loc)
 
 	return
 }

@@ -1,8 +1,11 @@
 package main
 
-import "encoding/json"
-import "strconv"
-import "strings"
+import (
+	"encoding/json"
+	"strconv"
+	"strings"
+	"time"
+)
 
 // {
 //   "type": "FeatureCollection",
@@ -92,7 +95,8 @@ type Report struct {
 	Title       string
 	Link        string
 	Category    string
-	Pubdate     string
+	Pubdate     time.Time
+	Updated     time.Time
 	Description string
 	Details     map[string]string
 	Geometry    Geometry
