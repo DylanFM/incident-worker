@@ -8,8 +8,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 	"time"
 )
 
@@ -48,7 +46,7 @@ func ImportFromDirectory(dir string) {
 		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.Reports), incident.latestReport().Title)
 
 		for _, report := range incident.Reports {
-			fmt.Printf("%s - %s, %s\n", report.Updated.Format("15:04 Mon Jan 2 2006"), report.Details["size"], report.Details["status"])
+			fmt.Printf("%s\n", report.Updated.Format("15:04 Mon Jan 2 2006"))
 		}
 	}
 
@@ -130,36 +128,15 @@ func reportFromFeature(f Feature) (report Report, err error) {
 	pubdateFormat := "2006/01/02 15:04:05-07"
 	report.Pubdate, _ = time.Parse(pubdateFormat, f.Properties.Pubdate)
 
-	report.Details = make(map[string]string)
-	// Make more use of the description
-	// We've got a string like this:
-	// ALERT LEVEL: Not Applicable<br />LOCATION: Australian Native Landscapes, Snowy Mountains Highway, Tumut<br />COUNCIL AREA: Tumut<br />STATUS: under control<br />TYPE: Tip Refuse fire<br />FIRE: Yes<br />SIZE: 0 ha<br />RESPONSIBLE AGENCY: Rural Fire Service<br />UPDATED: 5 Feb 2014 08:58
-	// Split by <br />
-	d := strings.Split(report.Description, "<br />")
-	// This is for the KEY: Value strings
-	re := regexp.MustCompile(`^([\w\s]+):\s(.*)`)
-	whitespaceRe := regexp.MustCompile(`\s+`)
-	for _, v := range d {
-		r := re.FindAllStringSubmatch(v, -1)
-		if len(r) == 1 {
-			m := r[0]
-			if len(m) == 3 {
-				label := strings.ToLower(m[1])
-				// Maybe unecessary, but I'd like to have no whitespace in the label
-				label = whitespaceRe.ReplaceAllString(label, "_")
-				report.Details[label] = m[2]
-			}
-			// } else {
-			// Well, there isn't a match which means there's some random text at the end.
-			// This is a chunk of text that's added onto the description
-			// log.Panicf("No matches %d - %s (from %s)", len(r), r, v)
-		}
-	}
+	details, err := report.parsedDescription()
+
+	fmt.Println(details)
+
 	// Updated details should be of type time
 	// Pull updated detail into the struct since it's time.Time
 	loc, _ := time.LoadLocation("Australia/Sydney")
 	updatedFormat := "2 Jan 2006 15:04"
-	report.Updated, _ = time.ParseInLocation(updatedFormat, report.Details["updated"], loc)
+	report.Updated, _ = time.ParseInLocation(updatedFormat, details["updated"], loc)
 
 	return
 }

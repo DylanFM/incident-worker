@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -98,7 +99,6 @@ type Report struct {
 	Pubdate     time.Time
 	Updated     time.Time
 	Description string
-	Details     map[string]string
 	Geometry    Geometry
 }
 
@@ -107,4 +107,37 @@ func (r *Report) Id() int {
 	s := strings.Split(r.Guid, ":")
 	id, _ := strconv.Atoi(s[len(s)-1])
 	return id
+}
+
+// Make more use of the description
+// We've got a string like this:
+// ALERT LEVEL: Not Applicable<br />LOCATION: Australian Native Landscapes, Snowy Mountains Highway, Tumut<br />COUNCIL AREA: Tumut<br />STATUS: under control<br />TYPE: Tip Refuse fire<br />FIRE: Yes<br />SIZE: 0 ha<br />RESPONSIBLE AGENCY: Rural Fire Service<br />UPDATED: 5 Feb 2014 08:58
+func (r *Report) parsedDescription() (map[string]string, error) {
+	details := make(map[string]string)
+
+	// Split by <br />
+	d := strings.Split(r.Description, "<br />")
+	// This is for the KEY: Value strings
+	re := regexp.MustCompile(`^([\w\s]+):\s(.*)`)
+	whitespaceRe := regexp.MustCompile(`\s+`)
+	for _, v := range d {
+		r := re.FindAllStringSubmatch(v, -1)
+		if len(r) == 1 {
+			m := r[0]
+			if len(m) == 3 {
+				label := strings.ToLower(m[1])
+				// Maybe unecessary, but I'd like to have no whitespace in the label
+				label = whitespaceRe.ReplaceAllString(label, "_")
+				details[label] = m[2]
+			}
+		} else {
+			// Well, there isn't a match which means there's some random text at the end.
+			// This is a chunk of text that's added onto the description
+			// return nil, fmt.Errorf("No matches %d - %s (from %s)", len(r), r, v)
+			// Store as extra
+			details["extra"] = v
+		}
+	}
+
+	return details, nil
 }
