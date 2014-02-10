@@ -11,46 +11,49 @@ import (
 	"time"
 )
 
-func ImportFromDirectory(dir string) {
-
-	matches, err := filepath.Glob(filepath.Join(dir, "*.json"))
-
-	if err != nil {
-		log.Fatal(err)
+func ImportFromDirectory(dir string, incidents map[int]Incident) (int, error) {
+	// Check if the directory exists / or if there's a permissions error there
+	if _, err := os.Stat(dir); err != nil {
+		return len(incidents), err
 	}
 
-	var incidents = make(map[int]Incident)
+	matches, globErr := filepath.Glob(filepath.Join(dir, "*.json"))
 
-	for _, filename := range matches {
-		contents, err := ioutil.ReadFile(filename)
+	if globErr != nil {
+		return len(incidents), globErr
+	}
 
-		if err != nil {
-			fmt.Printf("<%s>\t%s\n", filename, err)
-			continue
-		}
-
-		_, iErr := ImportJson(contents, incidents)
+	for _, path := range matches {
+		_, iErr := ImportFromFile(path, incidents)
 
 		if iErr != nil {
-			fmt.Printf("<%s>\t%s\n", filename, iErr)
+			// Continue importing if error encountered with this particular file
 			continue
 		}
 	}
 
-	// For now, report on what was imported into memory
-	for _, incident := range incidents {
-		// Print out some details about the incident and its reports
-		// (no. reports) Title
-		// - <Guid> - Pubdate - Category
-		// - ...
-		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.Reports), incident.latestReport().Title)
+	return len(incidents), nil
+}
 
-		for _, report := range incident.Reports {
-			fmt.Printf("%s\n", report.Updated.Format("15:04 Mon Jan 2 2006"))
-		}
+func ImportFromFile(path string, incidents map[int]Incident) (int, error) {
+	// Check if the file exists / or if there's a permissions error there
+	if _, err := os.Stat(path); err != nil {
+		return len(incidents), err
 	}
 
-	return
+	contents, readErr := ioutil.ReadFile(path)
+
+	if readErr != nil {
+		return len(incidents), readErr
+	}
+
+	count, iErr := ImportJson(contents, incidents)
+
+	if iErr != nil {
+		return len(incidents), iErr
+	}
+
+	return count, nil
 }
 
 func ImportJson(data []byte, incidents map[int]Incident) (int, error) {
@@ -58,7 +61,7 @@ func ImportJson(data []byte, incidents map[int]Incident) (int, error) {
 	var features FeatureCollection
 	jErr := json.Unmarshal(data, &features)
 	if jErr != nil {
-		return 0, jErr
+		return len(incidents), jErr
 	}
 
 	for i := range features.Features {
@@ -129,8 +132,9 @@ func reportFromFeature(f Feature) (report Report, err error) {
 	report.Pubdate, _ = time.Parse(pubdateFormat, f.Properties.Pubdate)
 
 	details, err := report.parsedDescription()
+	// Pull expected details into the struct as fields
 
-	fmt.Println(details)
+	// TODO
 
 	// Updated details should be of type time
 	// Pull updated detail into the struct since it's time.Time
@@ -150,5 +154,27 @@ func main() {
 
 	fmt.Printf("Importing from %s", dir)
 
-	ImportFromDirectory(dir)
+	// Initialise our in-memory data store
+	var incidents = make(map[int]Incident)
+
+	count, err := ImportFromDirectory(dir, incidents)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Imported %d incidents", count)
+
+	// For now, report on what was imported into memory
+	for _, incident := range incidents {
+		// Print out some details about the incident and its reports
+		// (no. reports) Title
+		// - <Guid> - Pubdate - Category
+		// - ...
+		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.Reports), incident.latestReport().Title)
+
+		for _, report := range incident.Reports {
+			fmt.Printf("%s\n", report.Updated.Format("15:04 Mon Jan 2 2006"))
+		}
+	}
 }
