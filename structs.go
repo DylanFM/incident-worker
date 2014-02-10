@@ -82,7 +82,12 @@ type FeatureCollection struct {
 // Now non-Geojson marshalling stuff...
 
 type Incident struct {
-	Id      int
+	UUID      string
+	RFSId     int
+	Current   bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
 	Reports []Report
 }
 
@@ -91,6 +96,8 @@ func (i *Incident) latestReport() Report {
 }
 
 type Report struct {
+	UUID              string
+	IncidentUUID      string
 	Hash              string
 	Guid              string
 	Title             string
@@ -109,6 +116,8 @@ type Report struct {
 	ResponsibleAgency string
 	Extra             string
 	Geometry          Geometry
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 func (r *Report) Id() int {
