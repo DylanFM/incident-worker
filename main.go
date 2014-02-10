@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -56,8 +58,33 @@ func ImportFromFile(path string, incidents map[int]Incident) (int, error) {
 	return count, nil
 }
 
-func ImportJson(data []byte, incidents map[int]Incident) (int, error) {
+func ImportFromURI(u *url.URL, incidents map[int]Incident) (int, error) {
+	// Not yet...
+	// URL is to an XML file, convert to GeoJSON
+	// www.rfs.nsw.gov.au/feeds/majorIncidents.xml
+	// check if u.Path matches json or xml
 
+	// At the moment just hosting a JSON parsed version on Dropbox
+  res, err := http.Get(u.String())
+  if err != nil {
+    return len(incidents), err
+  }
+
+  json, err := ioutil.ReadAll(res.Body)
+  res.Body.Close()
+  if err != nil {
+    return len(incidents), err
+  }
+
+	count, iErr := ImportJson(json, incidents)
+	if iErr != nil {
+		return len(incidents), iErr
+	}
+
+	return count, nil
+}
+
+func ImportJson(data []byte, incidents map[int]Incident) (int, error) {
 	var features FeatureCollection
 	jErr := json.Unmarshal(data, &features)
 	if jErr != nil {
@@ -147,23 +174,34 @@ func reportFromFeature(f Feature) (report Report, err error) {
 
 func main() {
 	if len(os.Args) == 1 {
-		log.Panic("Specify a directory to search within")
+		log.Panic("Specify a URL or directory to import from")
 	}
 
-	dir := os.Args[1]
+	loc := os.Args[1]
 
-	fmt.Printf("Importing from %s", dir)
+	fmt.Printf("Importing from %s\n", loc)
 
 	// Initialise our in-memory data store
 	var incidents = make(map[int]Incident)
 
-	count, err := ImportFromDirectory(dir, incidents)
+	var err error
+	var count int
+	// Argument could be URL or path
+	if u, urlErr := url.Parse(loc); urlErr == nil {
+		if u.IsAbs() {
+			count, err = ImportFromURI(u, incidents)
+		} else {
+			count, err = ImportFromDirectory(loc, incidents)
+		}
+	} else {
+		count, err = ImportFromDirectory(loc, incidents)
+	}
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Imported %d incidents", count)
+	fmt.Printf("Imported %d incidents from %s\n", count, loc)
 
 	// For now, report on what was imported into memory
 	for _, incident := range incidents {
@@ -172,9 +210,5 @@ func main() {
 		// - <Guid> - Pubdate - Category
 		// - ...
 		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.Reports), incident.latestReport().Title)
-
-		for _, report := range incident.Reports {
-			fmt.Printf("%s\n", report.Updated.Format("15:04 Mon Jan 2 2006"))
-		}
 	}
 }
