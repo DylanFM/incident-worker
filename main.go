@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -59,22 +62,69 @@ func ImportFromFile(path string, incidents map[int]Incident) (int, error) {
 }
 
 func ImportFromURI(u *url.URL, incidents map[int]Incident) (int, error) {
-	// Not yet...
-	// URL is to an XML file, convert to GeoJSON
-	// www.rfs.nsw.gov.au/feeds/majorIncidents.xml
-	// check if u.Path matches json or xml
+	res, err := http.Get(u.String())
+	if err != nil {
+		return len(incidents), err
+	}
+	contents, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return len(incidents), err
+	}
 
-	// At the moment just hosting a JSON parsed version on Dropbox
-  res, err := http.Get(u.String())
-  if err != nil {
-    return len(incidents), err
-  }
+	var json []byte
 
-  json, err := ioutil.ReadAll(res.Body)
-  res.Body.Close()
-  if err != nil {
-    return len(incidents), err
-  }
+	// Contents may be JSON or XMl
+	// If XML, run through the ogre conversion service so we have geojson
+	if string(contents[0]) == "<" {
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		part, err := writer.CreateFormFile("upload", "upload.xml")
+		if err != nil {
+			return len(incidents), err
+		}
+
+		_, err = io.Copy(part, bytes.NewReader(contents))
+		if err != nil {
+			return len(incidents), err
+		}
+
+		err = writer.Close()
+		if err != nil {
+			return len(incidents), err
+		}
+
+		req, err := http.NewRequest("POST", "http://ogre.adc4gis.com/convert", body)
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+
+		// dump, err := httputil.DumpRequest(req, true)
+		// if err != nil {
+		// 	return len(incidents), err
+		// }
+		// fmt.Println(string(dump))
+
+		client := &http.Client{}
+
+		res, err := client.Do(req)
+		if err != nil {
+			return len(incidents), err
+		}
+
+		defer res.Body.Close()
+		json, err = ioutil.ReadAll(res.Body)
+
+		// dump, err = httputil.DumpResponse(res, true)
+		// if err != nil {
+		// 	return len(incidents), err
+		// }
+		// fmt.Println(string(dump))
+
+		if err != nil {
+			return len(incidents), err
+		}
+	} else {
+		json = contents
+	}
 
 	count, iErr := ImportJson(json, incidents)
 	if iErr != nil {
