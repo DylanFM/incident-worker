@@ -211,13 +211,19 @@ func reportFromFeature(f Feature) (report Report, err error) {
 	details, err := report.parsedDescription()
 	// Pull expected details into the struct as fields
 
-	// TODO
-
-	// Updated details should be of type time
-	// Pull updated detail into the struct since it's time.Time
 	loc, _ := time.LoadLocation("Australia/Sydney")
 	updatedFormat := "2 Jan 2006 15:04"
-	report.Updated, _ = time.ParseInLocation(updatedFormat, details["updated"], loc)
+	report.Updated, _ = time.ParseInLocation(updatedFormat, details["updated"], loc) // Convert to time
+
+	report.AlertLevel = details["alert_level"]
+	report.Location = details["location"]
+	report.CouncilArea = details["council_area"]
+	report.Status = details["status"]
+	report.FireType = details["type"] // type is reserved, so use fire_type
+	report.Fire = details["fire"] == "Yes"
+	report.Size = details["size"]
+	report.ResponsibleAgency = details["responsible_agency"]
+	report.Extra = details["extra"]
 
 	return
 }

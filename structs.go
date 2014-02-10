@@ -91,15 +91,24 @@ func (i *Incident) latestReport() Report {
 }
 
 type Report struct {
-	Hash        string
-	Guid        string
-	Title       string
-	Link        string
-	Category    string
-	Pubdate     time.Time
-	Updated     time.Time
-	Description string
-	Geometry    Geometry
+	Hash              string
+	Guid              string
+	Title             string
+	Link              string
+	Category          string
+	Pubdate           time.Time
+	Description       string
+	Updated           time.Time
+	AlertLevel        string
+	Location          string
+	CouncilArea       string
+	Status            string
+	FireType          string
+	Fire              bool
+	Size              string
+	ResponsibleAgency string
+	Extra             string
+	Geometry          Geometry
 }
 
 func (r *Report) Id() int {
