@@ -93,10 +93,6 @@ type Incident struct {
 	Reports []Report
 }
 
-func (i *Incident) latestReport() Report {
-	return i.Reports[len(i.Reports)-1]
-}
-
 func (i *Incident) Import() error {
 	uuid, err := GetIncidentUUIDForRFSId(i.RFSId)
 	if err != nil && err != sql.ErrNoRows {
@@ -121,11 +117,23 @@ func (i *Incident) Import() error {
 		}
 	}
 
-	// get id from reports where hash = incident.latestReport().Hash
+	r := i.Reports[len(i.Reports)-1] // Get report that gave us this incident
+	r.IncidentUUID = i.UUID          // Update this on the report
 
-	// if row doesnt exist {
-	//   insert report into reports and ensure references incident
-	// }
+	// See if we have this report already
+	_, err = GetReportUUIDForHash(r.Hash)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			// The error isn't that we don't have a record
+			return err
+		} else {
+			// We don't have this report
+			err = r.Insert()
+			if err != nil {
+				return err
+			}
+		}
+	}
 
 	return nil
 }
@@ -229,4 +237,24 @@ func (r *Report) parsedDescription() (map[string]string, error) {
 	}
 
 	return details, nil
+}
+
+// Inserts the report into the database
+func (r *Report) Insert() error {
+	if r.UUID != "" {
+		return fmt.Errorf("Attempting to insert report that already has a UUID, %s", r.UUID)
+	}
+	stmt, err := db.Prepare(`INSERT INTO 
+    reports(incident_uuid, hash, guid, title, link, category, pubdate, description, updated, alert_level, location, council_area, status, fire_type, fire, size, responsible_agency, extra)
+    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+    RETURNING uuid`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	err = stmt.QueryRow(r.IncidentUUID, r.Hash, r.Guid, r.Title, r.Link, r.Category, r.Pubdate.Format(time.RFC3339), r.Description, r.Updated.Format(time.RFC3339), r.AlertLevel, r.Location, r.CouncilArea, r.Status, r.FireType, r.Fire, r.Size, r.ResponsibleAgency, r.Extra).Scan(&r.UUID)
+	if err != nil {
+		return err
+	}
+	return nil
 }

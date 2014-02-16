@@ -198,6 +198,25 @@ func GetIncidentUUIDForRFSId(id int) (string, error) {
 	return uuid, nil
 }
 
+// Takes a string which should be a hash for a report
+// If the hash exists, we return the matching row's UUID
+func GetReportUUIDForHash(hash string) (string, error) {
+	stmt, err := db.Prepare(`SELECT uuid FROM reports WHERE hash = $1`)
+	if err != nil {
+		return "", err
+	}
+	defer stmt.Close()
+
+	var uuid string
+	err = stmt.QueryRow(hash).Scan(&uuid)
+	if err != nil {
+		// err very well may be sql.ErrNoRows which says that no rows matched the hash
+		return "", err
+	}
+	// We have the uuid of an existing report
+	return uuid, nil
+}
+
 func incidentFromFeature(f Feature) (incident Incident, err error) {
 	incident = Incident{}
 
