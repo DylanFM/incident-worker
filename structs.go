@@ -1,7 +1,9 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -93,6 +95,75 @@ type Incident struct {
 
 func (i *Incident) latestReport() Report {
 	return i.Reports[len(i.Reports)-1]
+}
+
+func (i *Incident) Import() error {
+	uuid, err := GetIncidentUUIDForRFSId(i.RFSId)
+	if err != nil && err != sql.ErrNoRows {
+		// There's an error and it's not that there is no record
+		return err
+	}
+
+	if uuid != "" {
+		i.UUID = uuid
+
+		// We've got a report for this incident, so ensure that it's set to current
+		err = i.SetCurrent()
+		if err != nil {
+			return err
+		}
+	} else {
+		// The incident will automatically be set to current in the DB
+		// Because this is created in reponse to a report, that's correct
+		err = i.Insert()
+		if err != nil {
+			return err
+		}
+	}
+
+	// get id from reports where hash = incident.latestReport().Hash
+
+	// if row doesnt exist {
+	//   insert report into reports and ensure references incident
+	// }
+
+	return nil
+}
+
+// Sets the incident's current column to true if it isn't already
+func (i *Incident) SetCurrent() error {
+	stmt, err := db.Prepare(`UPDATE incidents SET current = true WHERE uuid = $1 AND current = false`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(i.UUID)
+	if err != nil {
+		return err
+	}
+
+	i.Current = true
+
+	return nil
+}
+
+// Inserts the incident into the database
+func (i *Incident) Insert() error {
+	if i.UUID != "" {
+		return fmt.Errorf("Attempting to insert incident that already has a UUID, %s", i.UUID)
+	}
+	stmt, err := db.Prepare(`INSERT INTO incidents(rfs_id) VALUES($1) RETURNING uuid`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRow(i.RFSId).Scan(&i.UUID)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type Report struct {
