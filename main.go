@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"crypto/sha1"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	_ "github.com/lib/pq"
 	"io"
 	"io/ioutil"
 	"log"
@@ -16,20 +18,22 @@ import (
 	"time"
 )
 
-func ImportFromDirectory(dir string, incidents map[int]Incident) (int, error) {
+var db *sql.DB // Global for database connection
+
+func ImportFromDirectory(dir string) (int, error) {
 	// Check if the directory exists / or if there's a permissions error there
 	if _, err := os.Stat(dir); err != nil {
-		return len(incidents), err
+		return 0, err
 	}
 
 	matches, globErr := filepath.Glob(filepath.Join(dir, "*.json"))
 
 	if globErr != nil {
-		return len(incidents), globErr
+		return 0, globErr
 	}
 
 	for _, path := range matches {
-		_, iErr := ImportFromFile(path, incidents)
+		_, iErr := ImportFromFile(path)
 
 		if iErr != nil {
 			// Continue importing if error encountered with this particular file
@@ -37,39 +41,40 @@ func ImportFromDirectory(dir string, incidents map[int]Incident) (int, error) {
 		}
 	}
 
-	return len(incidents), nil
+	// returning 1 which is silly... should return how many imported?
+	return 1, nil
 }
 
-func ImportFromFile(path string, incidents map[int]Incident) (int, error) {
+func ImportFromFile(path string) (int, error) {
 	// Check if the file exists / or if there's a permissions error there
 	if _, err := os.Stat(path); err != nil {
-		return len(incidents), err
+		return 0, err
 	}
 
 	contents, readErr := ioutil.ReadFile(path)
 
 	if readErr != nil {
-		return len(incidents), readErr
+		return 0, readErr
 	}
 
-	count, iErr := ImportJson(contents, incidents)
+	count, iErr := ImportJson(contents)
 
 	if iErr != nil {
-		return len(incidents), iErr
+		return 0, iErr
 	}
 
 	return count, nil
 }
 
-func ImportFromURI(u *url.URL, incidents map[int]Incident) (int, error) {
+func ImportFromURI(u *url.URL) (int, error) {
 	res, err := http.Get(u.String())
 	if err != nil {
-		return len(incidents), err
+		return 0, err
 	}
 	contents, err := ioutil.ReadAll(res.Body)
 	res.Body.Close()
 	if err != nil {
-		return len(incidents), err
+		return 0, err
 	}
 
 	var json []byte
@@ -81,17 +86,17 @@ func ImportFromURI(u *url.URL, incidents map[int]Incident) (int, error) {
 		writer := multipart.NewWriter(body)
 		part, err := writer.CreateFormFile("upload", "upload.xml")
 		if err != nil {
-			return len(incidents), err
+			return 0, err
 		}
 
 		_, err = io.Copy(part, bytes.NewReader(contents))
 		if err != nil {
-			return len(incidents), err
+			return 0, err
 		}
 
 		err = writer.Close()
 		if err != nil {
-			return len(incidents), err
+			return 0, err
 		}
 
 		req, err := http.NewRequest("POST", "http://ogre.adc4gis.com/convert", body)
@@ -99,7 +104,7 @@ func ImportFromURI(u *url.URL, incidents map[int]Incident) (int, error) {
 
 		// dump, err := httputil.DumpRequest(req, true)
 		// if err != nil {
-		// 	return len(incidents), err
+		// 	return 0, err
 		// }
 		// fmt.Println(string(dump))
 
@@ -107,7 +112,7 @@ func ImportFromURI(u *url.URL, incidents map[int]Incident) (int, error) {
 
 		res, err := client.Do(req)
 		if err != nil {
-			return len(incidents), err
+			return 0, err
 		}
 
 		defer res.Body.Close()
@@ -115,34 +120,33 @@ func ImportFromURI(u *url.URL, incidents map[int]Incident) (int, error) {
 
 		// dump, err = httputil.DumpResponse(res, true)
 		// if err != nil {
-		// 	return len(incidents), err
+		// 	return 0, err
 		// }
 		// fmt.Println(string(dump))
 
 		if err != nil {
-			return len(incidents), err
+			return 0, err
 		}
 	} else {
 		json = contents
 	}
 
-	count, iErr := ImportJson(json, incidents)
+	count, iErr := ImportJson(json)
 	if iErr != nil {
-		return len(incidents), iErr
+		return 0, iErr
 	}
 
 	return count, nil
 }
 
-func ImportJson(data []byte, incidents map[int]Incident) (int, error) {
+func ImportJson(data []byte) (int, error) {
 	var features FeatureCollection
-	jErr := json.Unmarshal(data, &features)
-	if jErr != nil {
-		return len(incidents), jErr
+	err := json.Unmarshal(data, &features)
+	if err != nil {
+		return 0, err
 	}
 
 	for i := range features.Features {
-		var err error
 		feature := &features.Features[i]
 
 		switch feature.Geometry.Type {
@@ -153,29 +157,64 @@ func ImportJson(data []byte, incidents map[int]Incident) (int, error) {
 		case "Polygon":
 			err = json.Unmarshal(feature.Geometry.Coordinates, &feature.Geometry.Polygon.Lines)
 		default:
-			fmt.Printf("Unknown feature type: %z\n", feature.Type)
+			err = fmt.Errorf("Unknown feature type: %z\n", feature.Type)
 		}
 		if err != nil {
-			fmt.Println(err)
+			return 0, err
 		}
 
-		incident, _ := incidentFromFeature(*feature)
-
-		existingIncident, exists := incidents[incident.Id]
-		if exists {
-			// See if the current report for the existing incident has the same hash of data as this latest report
-			if existingIncident.latestReport().Hash == incident.latestReport().Hash {
-				continue // Report hasn't changed, so move on
-			}
-
-			// Add the incident's report to the existing one, and assign to the latest incident
-			incident.Reports = append(existingIncident.Reports, incident.Reports...)
+		incident, err := incidentFromFeature(*feature)
+		if err != nil {
+			return 0, err
 		}
 
-		incidents[incident.Id] = incident
+		err = incident.Import()
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	return len(incidents), nil
+	// TODO Any incidents that were previously marked as current but weren't included in this import should have current set to false
+
+	return len(features.Features), nil
+}
+
+// This function takes an integer that should be an RFS Id for an Incident
+// If the incident exists in the database, it will return its UUID
+func GetIncidentUUIDForRFSId(id int) (string, error) {
+	stmt, err := db.Prepare(`SELECT uuid FROM incidents WHERE rfs_id = $1`)
+	if err != nil {
+		return "", err
+	}
+	defer stmt.Close()
+
+	var uuid string
+	err = stmt.QueryRow(id).Scan(&uuid)
+	if err != nil {
+		// err very well may be sql.ErrNoRows which says that no rows matched the rfs_id
+		return "", err
+	}
+	// We have the uuid of an existing incident
+	return uuid, nil
+}
+
+// Takes a string which should be a hash for a report
+// If the hash exists, we return the matching row's UUID
+func GetReportUUIDForHash(hash string) (string, error) {
+	stmt, err := db.Prepare(`SELECT uuid FROM reports WHERE hash = $1`)
+	if err != nil {
+		return "", err
+	}
+	defer stmt.Close()
+
+	var uuid string
+	err = stmt.QueryRow(hash).Scan(&uuid)
+	if err != nil {
+		// err very well may be sql.ErrNoRows which says that no rows matched the hash
+		return "", err
+	}
+	// We have the uuid of an existing report
+	return uuid, nil
 }
 
 func incidentFromFeature(f Feature) (incident Incident, err error) {
@@ -184,7 +223,7 @@ func incidentFromFeature(f Feature) (incident Incident, err error) {
 	report, _ := reportFromFeature(f) // The 1st report
 	incident.Reports = append(incident.Reports, report)
 
-	incident.Id = report.Id()
+	incident.RFSId = report.Id()
 
 	return
 }
@@ -196,7 +235,7 @@ func reportFromFeature(f Feature) (report Report, err error) {
 	s, _ := json.Marshal(f)
 	h := sha1.New()
 	h.Write([]byte(s))
-	report.Hash = fmt.Sprintf("%x", h)
+	report.Hash = fmt.Sprintf("%x", h.Sum(nil))
 
 	report.Guid = f.Properties.Guid
 	report.Title = f.Properties.Title
@@ -206,14 +245,16 @@ func reportFromFeature(f Feature) (report Report, err error) {
 	report.Geometry = f.Geometry
 	// Pubdate should be of type time
 	pubdateFormat := "2006/01/02 15:04:05-07"
-	report.Pubdate, _ = time.Parse(pubdateFormat, f.Properties.Pubdate)
+	pubdateAest, _ := time.Parse(pubdateFormat, f.Properties.Pubdate)
+	report.Pubdate = pubdateAest.UTC()
 
 	details, err := report.parsedDescription()
 	// Pull expected details into the struct as fields
 
 	loc, _ := time.LoadLocation("Australia/Sydney")
 	updatedFormat := "2 Jan 2006 15:04"
-	report.Updated, _ = time.ParseInLocation(updatedFormat, details["updated"], loc) // Convert to time
+	updatedAest, _ := time.ParseInLocation(updatedFormat, details["updated"], loc) // Convert to time
+	report.Updated = updatedAest.UTC()
 
 	report.AlertLevel = details["alert_level"]
 	report.Location = details["location"]
@@ -237,20 +278,24 @@ func main() {
 
 	fmt.Printf("Importing from %s\n", loc)
 
-	// Initialise our in-memory data store
-	var incidents = make(map[int]Incident)
-
+	// Open up a connection to the DB (well, just get the pool going)
 	var err error
+	db, err = sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
 	var count int
 	// Argument could be URL or path
 	if u, urlErr := url.Parse(loc); urlErr == nil {
 		if u.IsAbs() {
-			count, err = ImportFromURI(u, incidents)
+			count, err = ImportFromURI(u)
 		} else {
-			count, err = ImportFromDirectory(loc, incidents)
+			count, err = ImportFromDirectory(loc)
 		}
 	} else {
-		count, err = ImportFromDirectory(loc, incidents)
+		count, err = ImportFromDirectory(loc)
 	}
 
 	if err != nil {
@@ -258,13 +303,4 @@ func main() {
 	}
 
 	fmt.Printf("Imported %d incidents from %s\n", count, loc)
-
-	// For now, report on what was imported into memory
-	for _, incident := range incidents {
-		// Print out some details about the incident and its reports
-		// (no. reports) Title
-		// - <Guid> - Pubdate - Category
-		// - ...
-		fmt.Printf("\n<%d> (%d) %s\n", incident.Id, len(incident.Reports), incident.latestReport().Title)
-	}
 }
