@@ -140,7 +140,7 @@ func (i *Incident) Import() error {
 
 // Sets the incident's current column to true if it isn't already
 func (i *Incident) SetCurrent() error {
-	stmt, err := db.Prepare(`UPDATE incidents SET current = true WHERE uuid = $1 AND current = false`)
+	stmt, err := db.Prepare(`UPDATE incidents SET current = true, updated_at = (NOW() AT TIME ZONE 'UTC') WHERE uuid = $1 AND current = false`)
 	if err != nil {
 		return err
 	}
