@@ -245,14 +245,16 @@ func reportFromFeature(f Feature) (report Report, err error) {
 	report.Geometry = f.Geometry
 	// Pubdate should be of type time
 	pubdateFormat := "2006/01/02 15:04:05-07"
-	report.Pubdate, _ = time.Parse(pubdateFormat, f.Properties.Pubdate)
+	pubdateAest, _ := time.Parse(pubdateFormat, f.Properties.Pubdate)
+	report.Pubdate = pubdateAest.UTC()
 
 	details, err := report.parsedDescription()
 	// Pull expected details into the struct as fields
 
 	loc, _ := time.LoadLocation("Australia/Sydney")
 	updatedFormat := "2 Jan 2006 15:04"
-	report.Updated, _ = time.ParseInLocation(updatedFormat, details["updated"], loc) // Convert to time
+	updatedAest, _ := time.ParseInLocation(updatedFormat, details["updated"], loc) // Convert to time
+	report.Updated = updatedAest.UTC()
 
 	report.AlertLevel = details["alert_level"]
 	report.Location = details["location"]
