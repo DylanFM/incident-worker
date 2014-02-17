@@ -235,7 +235,7 @@ func reportFromFeature(f Feature) (report Report, err error) {
 	s, _ := json.Marshal(f)
 	h := sha1.New()
 	h.Write([]byte(s))
-	report.Hash = fmt.Sprintf("%x", h)
+	report.Hash = fmt.Sprintf("%x", h.Sum(nil))
 
 	report.Guid = f.Properties.Guid
 	report.Title = f.Properties.Title
