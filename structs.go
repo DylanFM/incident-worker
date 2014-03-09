@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -10,78 +9,34 @@ import (
 	"time"
 )
 
-// {
-//   "type": "FeatureCollection",
-//   "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
-//   "features": [{
-//     "type": "Feature",
-//     "properties": {
-//       "title": "Turners Road",
-//       "link": "http:\/\/www.rfs.nsw.gov.au\/dsp_content.cfm?cat_id=683",
-//       "category": "Advice",
-//       "guid": "tag:www.rfs.nsw.gov.au,2013-11-02:80707",
-//       "guid_isPermaLink": "false",
-//       "pubDate": "2013\/10\/31 00:00:00+00",
-//       "description": "..."
-//     },
-//     "geometry": {
-//       "type": "Polygon",
-//       "coordinates": [ [ [ 151.4124, -32.9768 ] ] ]
-//     }
-//   }]
-// }
-
-type Point struct {
-	Coordinates []float64
+type Feed struct {
+	Channel Channel `xml:"channel"`
 }
 
-type Line struct {
-	Points [][]float64
+type Channel struct {
+	Items []Item `xml:"item"`
 }
 
-type Polygon struct {
-	Lines [][][]float64
+// <item>
+//  <title>Bonfire Hill</title>
+//  <link>...</link>
+//  <category>Advice</category>
+//  <guid isPermaLink="false">tag:www.rfs.nsw.gov.au,2013-10-30:81726</guid>
+//  <pubDate>Wed, 30 Oct 2013 02:55:00 GMT</pubDate>
+//  <description>...</description>
+//  <georss:point>-33.6097 150.0216</georss:point>
+// </item>
+type Item struct {
+	// Raw []byte `xml:"innerxml"`
+	Title       string   `xml:"title"`
+	Link        string   `xml:"link"`
+	Category    string   `xml:"category"`
+	Guid        string   `xml:"guid"`
+	Pubdate     string   `xml:"pubDate"`
+	Description string   `xml:"description"`
+	Points      []string `xml:"point"`
+	Polygons    []string `xml:"polygon"`
 }
-
-type Geometry struct {
-	Type        string
-	Coordinates json.RawMessage
-	Point       Point
-	Line        Line
-	Polygon     Polygon
-}
-
-type Properties struct {
-	Title       string
-	Link        string
-	Category    string
-	Guid        string
-	Pubdate     string
-	Description string
-}
-
-type Feature struct {
-	Type       string
-	Properties Properties
-	Geometry   Geometry
-}
-
-type CrsProperties struct {
-	name string
-}
-
-type Crs struct {
-	Type       string
-	Properties CrsProperties
-}
-
-type FeatureCollection struct {
-	Type     string
-	Crs      Crs
-	Features []Feature
-}
-
-// Now non-Geojson marshalling stuff...
 
 type Incident struct {
 	UUID      string
@@ -194,7 +149,8 @@ type Report struct {
 	Size              string
 	ResponsibleAgency string
 	Extra             string
-	Geometry          Geometry
+	Points            []string
+	Polygons          []string
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 }
@@ -244,7 +200,7 @@ func (r *Report) Insert() error {
 	if r.UUID != "" {
 		return fmt.Errorf("Attempting to insert report that already has a UUID, %s", r.UUID)
 	}
-	stmt, err := db.Prepare(`INSERT INTO 
+	stmt, err := db.Prepare(`INSERT INTO
     reports(incident_uuid, hash, guid, title, link, category, pubdate, description, updated, alert_level, location, council_area, status, fire_type, fire, size, responsible_agency, extra)
     VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
     RETURNING uuid`)

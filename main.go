@@ -1,16 +1,14 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha1"
 	"database/sql"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	_ "github.com/lib/pq"
-	"io"
 	"io/ioutil"
 	"log"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,163 +18,90 @@ import (
 
 var db *sql.DB // Global for database connection
 
-func ImportFromDirectory(dir string) (int, error) {
+func ImportFromDirectory(dir string) error {
 	// Check if the directory exists / or if there's a permissions error there
 	if _, err := os.Stat(dir); err != nil {
-		return 0, err
+		return err
 	}
 
-	matches, globErr := filepath.Glob(filepath.Join(dir, "*.json"))
-
-	if globErr != nil {
-		return 0, globErr
+	matches, err := filepath.Glob(filepath.Join(dir, "*.xml"))
+	if err != nil {
+		return err
 	}
 
 	for _, path := range matches {
-		_, iErr := ImportFromFile(path)
-
-		if iErr != nil {
-			// Continue importing if error encountered with this particular file
-			continue
-		}
+    _ = ImportFromFile(path) // Ignoring error here at the moment
 	}
 
-	// returning 1 which is silly... should return how many imported?
-	return 1, nil
+	return nil
 }
 
-func ImportFromFile(path string) (int, error) {
+func ImportFromFile(path string) error {
 	// Check if the file exists / or if there's a permissions error there
 	if _, err := os.Stat(path); err != nil {
-		return 0, err
+		return err
 	}
 
-	contents, readErr := ioutil.ReadFile(path)
-
-	if readErr != nil {
-		return 0, readErr
+	contents, err := ioutil.ReadFile(path)
+	if err != nil {
+		return err
 	}
 
-	count, iErr := ImportJson(contents)
-
-	if iErr != nil {
-		return 0, iErr
+	err = ImportXml(contents)
+	if err != nil {
+		return err
 	}
 
-	return count, nil
+	return nil
 }
 
-func ImportFromURI(u *url.URL) (int, error) {
+func ImportFromURI(u *url.URL) error {
 	res, err := http.Get(u.String())
 	if err != nil {
-		return 0, err
+		return err
 	}
+
 	contents, err := ioutil.ReadAll(res.Body)
 	res.Body.Close()
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	var json []byte
-
-	// Contents may be JSON or XMl
-	// If XML, run through the ogre conversion service so we have geojson
-	if string(contents[0]) == "<" {
-		body := &bytes.Buffer{}
-		writer := multipart.NewWriter(body)
-		part, err := writer.CreateFormFile("upload", "upload.xml")
-		if err != nil {
-			return 0, err
-		}
-
-		_, err = io.Copy(part, bytes.NewReader(contents))
-		if err != nil {
-			return 0, err
-		}
-
-		err = writer.Close()
-		if err != nil {
-			return 0, err
-		}
-
-		req, err := http.NewRequest("POST", "http://ogre.adc4gis.com/convert", body)
-		req.Header.Set("Content-Type", writer.FormDataContentType())
-
-		// dump, err := httputil.DumpRequest(req, true)
-		// if err != nil {
-		// 	return 0, err
-		// }
-		// fmt.Println(string(dump))
-
-		client := &http.Client{}
-
-		res, err := client.Do(req)
-		if err != nil {
-			return 0, err
-		}
-
-		defer res.Body.Close()
-		json, err = ioutil.ReadAll(res.Body)
-
-		// dump, err = httputil.DumpResponse(res, true)
-		// if err != nil {
-		// 	return 0, err
-		// }
-		// fmt.Println(string(dump))
-
-		if err != nil {
-			return 0, err
-		}
-	} else {
-		json = contents
+	err = ImportXml(contents)
+	if err != nil {
+		return err
 	}
 
-	count, iErr := ImportJson(json)
-	if iErr != nil {
-		return 0, iErr
-	}
-
-	return count, nil
+	return nil
 }
 
-func ImportJson(data []byte) (int, error) {
-	var features FeatureCollection
-	err := json.Unmarshal(data, &features)
+func ImportXml(data []byte) error {
+
+	// We've got an XML file
+	// The file contains some metadata and a collection of items
+	// We want to get each of the items into an array
+	var feed Feed
+	err := xml.Unmarshal(data, &feed)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	for i := range features.Features {
-		feature := &features.Features[i]
+	// Feed each item to a worker which turns the items into incident/report structs
+	for _, item := range feed.Channel.Items {
+    incidentChan := make(chan Incident)
 
-		switch feature.Geometry.Type {
-		case "Point":
-			err = json.Unmarshal(feature.Geometry.Coordinates, &feature.Geometry.Point.Coordinates)
-		case "LineString":
-			err = json.Unmarshal(feature.Geometry.Coordinates, &feature.Geometry.Line.Points)
-		case "Polygon":
-			err = json.Unmarshal(feature.Geometry.Coordinates, &feature.Geometry.Polygon.Lines)
-		default:
-			err = fmt.Errorf("Unknown feature type: %z\n", feature.Type)
-		}
-		if err != nil {
-			return 0, err
-		}
+		go func(item Item) {
+			incident, _ := incidentFromItem(item)
 
-		incident, err := incidentFromFeature(*feature)
-		if err != nil {
-			return 0, err
-		}
+			incident.Import()
 
-		err = incident.Import()
-		if err != nil {
-			return 0, err
-		}
+			incidentChan <- incident
+		}(item)
+
+    <-incidentChan
 	}
 
-	// TODO Any incidents that were previously marked as current but weren't included in this import should have current set to false
-
-	return len(features.Features), nil
+	return nil
 }
 
 // This function takes an integer that should be an RFS Id for an Incident
@@ -217,10 +142,10 @@ func GetReportUUIDForHash(hash string) (string, error) {
 	return uuid, nil
 }
 
-func incidentFromFeature(f Feature) (incident Incident, err error) {
+func incidentFromItem(i Item) (incident Incident, err error) {
 	incident = Incident{}
 
-	report, _ := reportFromFeature(f) // The 1st report
+	report, _ := reportFromItem(i) // The 1st report
 	incident.Reports = append(incident.Reports, report)
 
 	incident.RFSId = report.Id()
@@ -228,24 +153,25 @@ func incidentFromFeature(f Feature) (incident Incident, err error) {
 	return
 }
 
-func reportFromFeature(f Feature) (report Report, err error) {
+func reportFromItem(i Item) (report Report, err error) {
 	report = Report{}
 
-	// Generate hash of json representation of feature
-	s, _ := json.Marshal(f)
+	// Generate hash of json representation of item
+	s, _ := json.Marshal(i)
 	h := sha1.New()
 	h.Write([]byte(s))
 	report.Hash = fmt.Sprintf("%x", h.Sum(nil))
 
-	report.Guid = f.Properties.Guid
-	report.Title = f.Properties.Title
-	report.Link = f.Properties.Link
-	report.Category = f.Properties.Category
-	report.Description = f.Properties.Description
-	report.Geometry = f.Geometry
+	report.Guid = i.Guid
+	report.Title = i.Title
+	report.Link = i.Link
+	report.Category = i.Category
+	report.Description = i.Description
+	report.Points = i.Points
+	report.Polygons = i.Polygons
 	// Pubdate should be of type time
 	pubdateFormat := "2006/01/02 15:04:05-07"
-	pubdateAest, _ := time.Parse(pubdateFormat, f.Properties.Pubdate)
+	pubdateAest, _ := time.Parse(pubdateFormat, i.Pubdate)
 	report.Pubdate = pubdateAest.UTC()
 
 	details, err := report.parsedDescription()
@@ -286,21 +212,20 @@ func main() {
 	}
 	defer db.Close()
 
-	var count int
 	// Argument could be URL or path
 	if u, urlErr := url.Parse(loc); urlErr == nil {
 		if u.IsAbs() {
-			count, err = ImportFromURI(u)
+			err = ImportFromURI(u)
 		} else {
-			count, err = ImportFromDirectory(loc)
+			err = ImportFromDirectory(loc)
 		}
 	} else {
-		count, err = ImportFromDirectory(loc)
+		err = ImportFromDirectory(loc)
 	}
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Imported %d incidents from %s\n", count, loc)
+	fmt.Printf("Imported incidents from %s\n", loc)
 }
