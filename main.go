@@ -30,7 +30,7 @@ func ImportFromDirectory(dir string) error {
 	}
 
 	for _, path := range matches {
-    _ = ImportFromFile(path) // Ignoring error here at the moment
+		_ = ImportFromFile(path) // Ignoring error here at the moment
 	}
 
 	return nil
@@ -88,7 +88,7 @@ func ImportXml(data []byte) error {
 
 	// Feed each item to a worker which turns the items into incident/report structs
 	for _, item := range feed.Channel.Items {
-    incidentChan := make(chan Incident)
+		incidentChan := make(chan Incident)
 
 		go func(item Item) {
 			incident, _ := incidentFromItem(item)
@@ -98,10 +98,40 @@ func ImportXml(data []byte) error {
 			incidentChan <- incident
 		}(item)
 
-    <-incidentChan
+		<-incidentChan
 	}
 
 	return nil
+}
+
+func GetNumIncidents() (int, error) {
+	stmt, err := db.Prepare(`SELECT COUNT(*) FROM incidents`)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	var count int
+	err = stmt.QueryRow().Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func GetNumReports() (int, error) {
+	stmt, err := db.Prepare(`SELECT COUNT(*) FROM reports`)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	var count int
+	err = stmt.QueryRow().Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 // This function takes an integer that should be an RFS Id for an Incident
@@ -212,6 +242,10 @@ func main() {
 	}
 	defer db.Close()
 
+	// Get the start count for incidents and reports
+	stInCount, _ := GetNumIncidents()
+	stRpCount, _ := GetNumReports()
+
 	// Argument could be URL or path
 	if u, urlErr := url.Parse(loc); urlErr == nil {
 		if u.IsAbs() {
@@ -227,5 +261,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Imported incidents from %s\n", loc)
+	// Get the start count for incidents and reports
+	enInCount, _ := GetNumIncidents()
+	enRpCount, _ := GetNumReports()
+
+	fmt.Printf("%d new incidents, %d total\n", enInCount-stInCount, enInCount)
+	fmt.Printf("%d new reports, %d total\n", enRpCount-stRpCount, enRpCount)
 }
