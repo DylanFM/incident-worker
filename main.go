@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/kpawlik/geojson"
 	_ "github.com/lib/pq"
 	"io/ioutil"
 	"log"
@@ -13,6 +14,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -183,6 +186,25 @@ func incidentFromItem(i Item) (incident Incident, err error) {
 	return
 }
 
+func toGeoJsonPoints(s string) (string, error) {
+	// p is in form of "-33.6097 150.0216"
+	ll := strings.Split(s, " ")
+
+	flLat, _ := strconv.ParseFloat(ll[0], 64)
+	flLng, _ := strconv.ParseFloat(ll[1], 64)
+
+	lat := geojson.Coord(flLat)
+	lng := geojson.Coord(flLng)
+
+	c := geojson.Coordinate{lng, lat}
+
+	p := geojson.NewPoint(c)
+
+	gj, _ := json.Marshal(p)
+
+	return string(gj), nil
+}
+
 func reportFromItem(i Item) (report Report, err error) {
 	report = Report{}
 
@@ -197,8 +219,12 @@ func reportFromItem(i Item) (report Report, err error) {
 	report.Link = i.Link
 	report.Category = i.Category
 	report.Description = i.Description
-	report.Points = i.Points
-	report.Polygons = i.Polygons
+
+	// Geometries need to be converted into GeoJSON representations for easy PostGIS insertion
+	// report.Points, _ = toGeoJsonPoints(i.Points)
+
+	// report.Polygons = i.Polygons
+
 	// Pubdate should be of type time
 	pubdateFormat := "2006/01/02 15:04:05-07"
 	pubdateAest, _ := time.Parse(pubdateFormat, i.Pubdate)
