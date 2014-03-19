@@ -221,7 +221,7 @@ func reportFromItem(i Item) (report Report, err error) {
 	report.Description = i.Description
 
 	// Geometries need to be converted into GeoJSON representations for easy PostGIS insertion
-	// report.Points, _ = toGeoJsonPoints(i.Points)
+	report.Points, _ = toGeoJsonPoints(i.Points[0]) // NOTE I'm using the 1st item here, assuming we'll only have 1 point per-item
 
 	// report.Polygons = i.Polygons
 
