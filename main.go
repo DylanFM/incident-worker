@@ -71,6 +71,9 @@ func ImportXml(data []byte) error {
 		return err
 	}
 
+	// For the incidents in the unmarshalled XML feed
+	var incidents []Incident
+
 	// Feed each item to a worker which turns the items into incident/report structs
 	for _, item := range feed.Channel.Items {
 		incidentChan := make(chan Incident)
@@ -83,10 +86,70 @@ func ImportXml(data []byte) error {
 			incidentChan <- incident
 		}(item)
 
-		<-incidentChan
+		incident := <-incidentChan
+
+		incidents = append(incidents, incident)
+	}
+
+	// Update current incidents to the latest import
+	err = UpdateCurrentIncidents(incidents)
+	if err != nil {
+		return err
 	}
 
 	return nil
+}
+
+func UpdateCurrentIncidents(incidents []Incident) error {
+	// We have a collection of incidents
+	// These incidents are now considered "current"
+	// In the database we've got a number of incidents marked as current too
+
+	// Get the IDs of the new incidents
+
+	args := make([]interface{}, len(incidents))
+	for i, incident := range incidents {
+		args[i] = incident.UUID
+	}
+
+	// Having trouble building the variable length IN clause for this query
+	ins := strings.Split(strings.Repeat("$", len(args)), "")
+	for i, _ := range ins {
+		ins[i] = fmt.Sprintf("$%d", i+1)
+	}
+	// We've got a slice of ["$1", "$2" ...]
+
+	// Set all current incidents who aren't in this collection of incidents to not current
+	q := fmt.Sprintf(`UPDATE incidents SET current = false WHERE current = true AND uuid NOT IN (%s)`, strings.Join(ins, ","))
+	stmt, err := db.Prepare(q)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(args...)
+	if err != nil {
+		return err
+	}
+
+	// Now the only incidents marked as current in the database will be from this update
+
+	return nil
+}
+
+func GetNumCurrentIncidents() (int, error) {
+	stmt, err := db.Prepare(`SELECT COUNT(*) FROM incidents WHERE current = true`)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	var count int
+	err = stmt.QueryRow().Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func GetNumIncidents() (int, error) {
@@ -252,6 +315,7 @@ func main() {
 
 	// Get the start count for incidents and reports
 	stInCount, _ := GetNumIncidents()
+	stCiCount, _ := GetNumCurrentIncidents()
 	stRpCount, _ := GetNumReports()
 
 	// Argument could be URL or path
@@ -269,8 +333,10 @@ func main() {
 
 	// Get the start count for incidents and reports
 	enInCount, _ := GetNumIncidents()
+	enCiCount, _ := GetNumCurrentIncidents()
 	enRpCount, _ := GetNumReports()
 
 	fmt.Printf("%d new incidents, %d total\n", enInCount-stInCount, enInCount)
 	fmt.Printf("%d new reports, %d total\n", enRpCount-stRpCount, enRpCount)
+	fmt.Printf("%d current incidents, %d change\n", enCiCount, enCiCount-stCiCount)
 }
