@@ -13,31 +13,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
 
 var db *sql.DB // Global for database connection
-
-func ImportFromDirectory(dir string) error {
-	// Check if the directory exists / or if there's a permissions error there
-	if _, err := os.Stat(dir); err != nil {
-		return err
-	}
-
-	matches, err := filepath.Glob(filepath.Join(dir, "*.xml"))
-	if err != nil {
-		return err
-	}
-
-	for _, path := range matches {
-		_ = ImportFromFile(path) // Ignoring error here at the moment
-	}
-
-	return nil
-}
 
 func ImportFromFile(path string) error {
 	// Check if the file exists / or if there's a permissions error there
@@ -78,6 +59,7 @@ func ImportFromURI(u *url.URL) error {
 	return nil
 }
 
+// Takes a GeoRSS feed and imports features and reports from the XML
 func ImportXml(data []byte) error {
 
 	// We've got an XML file
@@ -253,7 +235,7 @@ func reportFromItem(i Item) (report Report, err error) {
 
 func main() {
 	if len(os.Args) == 1 {
-		log.Panic("Specify a URL or directory to import from")
+		log.Panic("Specify a URL or file to import from")
 	}
 
 	loc := os.Args[1]
@@ -277,10 +259,8 @@ func main() {
 		if u.IsAbs() {
 			err = ImportFromURI(u)
 		} else {
-			err = ImportFromDirectory(loc)
+			err = ImportFromFile(loc)
 		}
-	} else {
-		err = ImportFromDirectory(loc)
 	}
 
 	if err != nil {
