@@ -29,7 +29,7 @@ Use the command line interface to import data from a local or remote XML file.
 
 `incidentworker` imports the data into a PostgreSQL database and makes use of the `postgis` and `uuid-ossp` extensions. The database is managed in this project using [Goose](https://bitbucket.org/liamstask/goose/).
 
-Configure the database for Goose by copying the file [dbconf.yml.example](https://github.com/DylanFM/incident-worker/blob/master/db/dbconf.yml.example) to `dbconf.yml`. If you prefer not to use the `DATABASE_URL` environment variable, edit `dbconf.yml` with your database connection details. Ensure the database has been created, then run `goose up` to run the migrations in [db/migrations](https://github.com/DylanFM/incident-worker/tree/master/db).
+Configure the database for Goose by copying the file [dbconf.yml.example](https://github.com/DylanFM/incident-worker/blob/master/db/dbconf.yml.example) to `dbconf.yml`. The database is configured by default with a `DATABASE_URL` environment variable, e.g. `postgres://user:pass@localhost/database_name?sslmode=disable`. Alternatively you can edit `dbconf.yml` with your database connection details. Ensure the database has been created, then run `goose up` to run the migrations in [db/migrations](https://github.com/DylanFM/incident-worker/tree/master/db).
 
 ### Import a local file
 
