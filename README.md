@@ -2,7 +2,7 @@
 
 _Part of a collection of tools used to provide an API to NSW bushfire data_: [Data collector](https://github.com/dylanfm/major-incidents-data), [Importer (this repo)](https://github.com/DylanFM/incident-worker) and [GeoJSON API](https://github.com/DylanFM/bushfires)
 
-`incidentworker` imports GeoRSS from the NSW RFS [major incidents GeoRSS feed](http://www.rfs.nsw.gov.au/feeds/majorIncidents.xml) into a Postgres database. The command-line interface supports importing from a local file or over the internets.
+`incidentworker` imports data from the NSW Rural Fire Service's [major incidents GeoRSS feed](http://www.rfs.nsw.gov.au/feeds/majorIncidents.xml) into a database. The GeoRSS feed above contains a collection of current incidents. An incident is a fire (or something similar). Current incidents are those that have not been resolved yet.
 
 ## Why?
 
@@ -13,23 +13,23 @@ For me, this tool addresses 2 needs as I build a [GeoJSON API](https://github.co
 
 ## What's going on
 
-The GeoRSS feed linked to above contains a list of current incidents. An incident is a fire somewhere, and current ones are incidents which have not been resolved. In the development of `incidentworker` I've used `Incident` and introduced `Report`. An incident has many reports. Basically, I'm saying that the GeoRSS feed actually contains a collection of reports, and each report relates to an incident. The feed therefore contains the most recent report for all incidents that haven't been resolved yet.
+In the development of `incidentworker` I've used the noun `Incident` and introduced `Report`. An incident has many reports. From this point of view, the GeoRSS feed actually contains a collection of reports, and each report relates to an incident. To be more accurate, the feed contains the most recent report for all incidents that haven't been resolved yet.
 
-When `incidentworker` performs an import it roughly does the following for each entry or `Report` in the feed:
+When `incidentworker` performs an import it does roughly the following for each entry (or `Report`) in the feed:
 
 1. Have we seen the `Incident` this `Report` refers to before?
 2. If no, insert the `Incident` into the database. It will be marked as `current` upon insertion.
 3. If yes, ensure the existing `Incident` is marked as `current`.
 4. If we haven't seen this `Report` before, insert it into the database too.
-5. Ensure that all `Incident` which are no longer `current` are changed to `current = false` in the database.
+5. Ensure that the only incidents marked as `current` in the database are the ones from this update.
 
 ## Usage
 
-Use the command line interface to import data from an XML file locally or online.
+Use the command line interface to import data from a local or remote XML file.
 
-`incidentworker` imports the data into a PostgreSQL database and makes use of the `postgis` and `uuid-ossp` extensions. The database can be created using [Goose](https://bitbucket.org/liamstask/goose/), which uses the SQL migrations located in [db/migrations](https://github.com/DylanFM/incident-worker/tree/master/db).
+`incidentworker` imports the data into a PostgreSQL database and makes use of the `postgis` and `uuid-ossp` extensions. The database is managed in this project using [Goose](https://bitbucket.org/liamstask/goose/).
 
-Configure the database for Goose by copying the file [dbconf.yml.example](https://github.com/DylanFM/incident-worker/blob/master/db/dbconf.yml.example) to `dbconf.yml`. If you prefer not to use the `DATABASE_URL` environment variable, edit `dbconf.yml` with your database connection details. Ensure the database has been created, then run `goose up` to get it in order.
+Configure the database for Goose by copying the file [dbconf.yml.example](https://github.com/DylanFM/incident-worker/blob/master/db/dbconf.yml.example) to `dbconf.yml`. If you prefer not to use the `DATABASE_URL` environment variable, edit `dbconf.yml` with your database connection details. Ensure the database has been created, then run `goose up` to run the migrations in [db/migrations](https://github.com/DylanFM/incident-worker/tree/master/db).
 
 ### Import a local file
 
@@ -45,15 +45,13 @@ $ incidentworker http://www.rfs.nsw.gov.au/feeds/majorIncidents.xml
 
 ### Import a collection of files
 
-Previously `incidentworker` supported importing from a directory, but I've removed that functionality and now use a script such as this:
+I use the following to import the data I've [collected](https://github.com/dylanfm/major-incidents-data). To import 5 months of hourly GeoRSS feeds currently takes about 5 minutes.
 
-```bash
-#!/bin/bash
-
+```
 for file in /path/to/major-incidents-data/*.xml; do ./incidentworker $file; done
 ```
 
-This is how I've been importing the data collected by [this](https://github.com/dylanfm/major-incidents-data). To import 5 months of hourly GeoRSS feeds currently takes about 5 minutes.
+
 
 ### Output
 
