@@ -26,6 +26,7 @@ CREATE TABLE reports (
   size text,
   responsible_agency text,
   extra text,
+  point geography(Point),
   geometry geometry,
   created_at timestamp with time zone DEFAULT timezone('UTC', NOW()) NOT NULL,
   updated_at timestamp with time zone DEFAULT timezone('UTC', NOW()) NOT NULL
@@ -38,6 +39,7 @@ CREATE INDEX report_created_at_index ON reports (created_at);
 CREATE INDEX report_updated_index ON reports (updated);
 CREATE INDEX report_fire_index ON reports (fire);
 CREATE INDEX report_geometry_index ON reports USING gist (geometry);
+CREATE INDEX report_point_index ON reports USING gist (point);
 
 -- +goose Down
 DROP INDEX current_incidents_index;
@@ -47,6 +49,7 @@ DROP INDEX report_created_at_index;
 DROP INDEX report_updated_index;
 DROP INDEX report_fire_index;
 DROP INDEX report_geometry_index;
+DROP INDEX report_point_index;
 
 DROP TABLE reports;
 DROP TABLE incidents;

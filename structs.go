@@ -201,14 +201,14 @@ func (r *Report) Insert() error {
 		return fmt.Errorf("Attempting to insert report that already has a UUID, %s", r.UUID)
 	}
 	stmt, err := db.Prepare(`INSERT INTO
-    reports(incident_uuid, hash, guid, title, link, category, pubdate, description, updated, alert_level, location, council_area, status, fire_type, fire, size, responsible_agency, extra, geometry)
-    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, ST_AsText(ST_GeomFromGeoJSON($19)))
+    reports(incident_uuid, hash, guid, title, link, category, pubdate, description, updated, alert_level, location, council_area, status, fire_type, fire, size, responsible_agency, extra, geometry, point)
+    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, ST_AsText(ST_GeomFromGeoJSON($19)), Geography(ST_GeomFromGeoJSON($20)))
     RETURNING uuid`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
-	err = stmt.QueryRow(r.IncidentUUID, r.Hash, r.Guid, r.Title, r.Link, r.Category, r.Pubdate.Format(time.RFC3339), r.Description, r.Updated.Format(time.RFC3339), r.AlertLevel, r.Location, r.CouncilArea, r.Status, r.FireType, r.Fire, r.Size, r.ResponsibleAgency, r.Extra, r.Points).Scan(&r.UUID)
+	err = stmt.QueryRow(r.IncidentUUID, r.Hash, r.Guid, r.Title, r.Link, r.Category, r.Pubdate.Format(time.RFC3339), r.Description, r.Updated.Format(time.RFC3339), r.AlertLevel, r.Location, r.CouncilArea, r.Status, r.FireType, r.Fire, r.Size, r.ResponsibleAgency, r.Extra, r.Points, r.Points).Scan(&r.UUID)
 	if err != nil {
 		return err
 	}
