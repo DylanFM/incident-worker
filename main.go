@@ -271,17 +271,15 @@ func reportFromItem(i Item) (report Report, err error) {
 	// report.Polygons = i.Polygons
 
 	// Pubdate should be of type time
-	pubdateFormat := "2006/01/02 15:04:05-07"
-	pubdateAest, _ := time.Parse(pubdateFormat, i.Pubdate)
-	report.Pubdate = pubdateAest.UTC()
+	pubdateFormat := "Mon, 2 Jan 2006 15:04:05 GMT"
+	report.Pubdate, _ = time.Parse(pubdateFormat, i.Pubdate)
 
 	details, err := report.parsedDescription()
 	// Pull expected details into the struct as fields
 
 	loc, _ := time.LoadLocation("Australia/Sydney")
 	updatedFormat := "2 Jan 2006 15:04"
-	updatedAest, _ := time.ParseInLocation(updatedFormat, details["updated"], loc) // Convert to time
-	report.Updated = updatedAest.UTC()
+	report.Updated, _ = time.ParseInLocation(updatedFormat, details["updated"], loc) // Convert to time
 
 	report.AlertLevel = details["alert_level"]
 	report.Location = details["location"]

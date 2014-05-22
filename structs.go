@@ -208,7 +208,7 @@ func (r *Report) Insert() error {
 		return err
 	}
 	defer stmt.Close()
-	err = stmt.QueryRow(r.IncidentUUID, r.Hash, r.Guid, r.Title, r.Link, r.Category, r.Pubdate.Format(time.RFC3339), r.Description, r.Updated.Format(time.RFC3339), r.AlertLevel, r.Location, r.CouncilArea, r.Status, r.FireType, r.Fire, r.Size, r.ResponsibleAgency, r.Extra, r.Points, r.Points).Scan(&r.UUID)
+	err = stmt.QueryRow(r.IncidentUUID, r.Hash, r.Guid, r.Title, r.Link, r.Category, r.Pubdate.UTC().Format(time.RFC3339), r.Description, r.Updated.UTC().Format(time.RFC3339), r.AlertLevel, r.Location, r.CouncilArea, r.Status, r.FireType, r.Fire, r.Size, r.ResponsibleAgency, r.Extra, r.Points, r.Points).Scan(&r.UUID)
 	if err != nil {
 		return err
 	}
