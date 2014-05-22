@@ -227,6 +227,7 @@ func incidentFromItem(i Item) (incident Incident, err error) {
 	incident.Reports = append(incident.Reports, report)
 
 	incident.RFSId = report.Id()
+	incident.FirstSeen = report.Pubdate // Used when setting the initial tstzrange
 
 	return
 }

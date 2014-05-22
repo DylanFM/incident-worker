@@ -42,6 +42,7 @@ type Incident struct {
 	UUID      string
 	RFSId     int
 	Current   bool
+	FirstSeen time.Time
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -87,6 +88,11 @@ func (i *Incident) Import() error {
 			if err != nil {
 				return err
 			}
+			// Possibly set this report as the latest
+			err = r.SetPubdateAsIncidentCurrentFromUpper()
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -116,13 +122,18 @@ func (i *Incident) Insert() error {
 	if i.UUID != "" {
 		return fmt.Errorf("Attempting to insert incident that already has a UUID, %s", i.UUID)
 	}
-	stmt, err := db.Prepare(`INSERT INTO incidents(rfs_id) VALUES($1) RETURNING uuid`)
+	stmt, err := db.Prepare(`INSERT INTO incidents(rfs_id, current_from) VALUES($1, $2) RETURNING uuid`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRow(i.RFSId).Scan(&i.UUID)
+	// A postgres tstzrange which holds when the incident was first and last seen
+	// For now, we're creating an incident, so include its FirstSeen for both values
+	firstSeenStr := i.FirstSeen.UTC().Format(time.RFC3339)
+	currentRange := fmt.Sprintf("[%s,%s]", firstSeenStr, firstSeenStr)
+
+	err = stmt.QueryRow(i.RFSId, currentRange).Scan(&i.UUID)
 	if err != nil {
 		return err
 	}
@@ -209,6 +220,23 @@ func (r *Report) Insert() error {
 	}
 	defer stmt.Close()
 	err = stmt.QueryRow(r.IncidentUUID, r.Hash, r.Guid, r.Title, r.Link, r.Category, r.Pubdate.UTC().Format(time.RFC3339), r.Description, r.Updated.UTC().Format(time.RFC3339), r.AlertLevel, r.Location, r.CouncilArea, r.Status, r.FireType, r.Fire, r.Size, r.ResponsibleAgency, r.Extra, r.Points, r.Points).Scan(&r.UUID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// If this is the latest report for an incident, update the incident's current_from column with this report's pubdate
+func (r *Report) SetPubdateAsIncidentCurrentFromUpper() error {
+	// Update the incident's current_from upper bound with this pubdate if it's greater than the current upper bound
+	stmt, err := db.Prepare(`UPDATE incidents
+    SET current_from = tstzrange(lower(current_from), $1)
+    WHERE uuid = $2 AND upper(current_from) < $3::timestamptz`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(r.Pubdate.UTC().Format(time.RFC3339), r.IncidentUUID, r.Pubdate.UTC().Format(time.RFC3339))
 	if err != nil {
 		return err
 	}

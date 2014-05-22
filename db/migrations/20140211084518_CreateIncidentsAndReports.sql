@@ -3,6 +3,7 @@ CREATE TABLE incidents (
   uuid uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
   rfs_id integer NOT NULL UNIQUE,
   current boolean DEFAULT true NOT NULL, -- Default true because they're created when they appear in the list of current incidents
+  current_from tstzrange NOT NULL,
   created_at timestamp with time zone DEFAULT timezone('UTC', NOW()) NOT NULL,
   updated_at timestamp with time zone DEFAULT timezone('UTC', NOW()) NOT NULL
 );
@@ -33,6 +34,7 @@ CREATE TABLE reports (
 );
 
 CREATE INDEX current_incidents_index ON incidents (current);
+CREATE INDEX current_from_incidents_index ON incidents USING GiST(current_from);
 CREATE INDEX reports_incident_uuid_index ON reports (incident_uuid);
 CREATE INDEX report_hash_index ON reports (hash);
 CREATE INDEX report_created_at_index ON reports (created_at);
