@@ -160,7 +160,7 @@ type Report struct {
 	Size              string
 	ResponsibleAgency string
 	Extra             string
-	Points            string // Geojson
+	Points            string // Just the 1st point... maybe we add support for multiple points at some point
 	Geometry          []string
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
@@ -213,24 +213,39 @@ func (r *Report) Insert() error {
 	}
 	stmt, err := db.Prepare(`INSERT INTO
     reports(incident_uuid, hash, guid, title, link, category, pubdate, description, updated, alert_level, location, council_area, status, fire_type, fire, size, responsible_agency, extra, geometry, point)
-    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, ST_GeomFromText($19, 4326), Geography(ST_GeomFromGeoJSON($20)))
+    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, ST_GeomFromText($19, 4326), ST_GeomFromText($20))
     RETURNING uuid`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	var geom string
-
-	if len(r.Geometry) > 0 {
-		geom = toMultiPolygon(r.Geometry)
-	}
-
-	err = stmt.QueryRow(r.IncidentUUID, r.Hash, r.Guid, r.Title, r.Link, r.Category, r.Pubdate.UTC().Format(time.RFC3339), r.Description, r.Updated.UTC().Format(time.RFC3339), r.AlertLevel, r.Location, r.CouncilArea, r.Status, r.FireType, r.Fire, r.Size, r.ResponsibleAgency, r.Extra, geom, r.Points).Scan(&r.UUID)
+	err = stmt.QueryRow(r.IncidentUUID, r.Hash, r.Guid, r.Title, r.Link, r.Category, r.Pubdate.UTC().Format(time.RFC3339), r.Description, r.Updated.UTC().Format(time.RFC3339), r.AlertLevel, r.Location, r.CouncilArea, r.Status, r.FireType, r.Fire, r.Size, r.ResponsibleAgency, r.Extra, r.GeometryCollection(), toPoint(r.Points)).Scan(&r.UUID)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+// Returns a Postgis text representation of the geometries for a given report
+// Unfortunately for now the resulting insertion will fail if the report has no points and no polygons
+func (r *Report) GeometryCollection() string {
+	var geom []string
+	var coll string
+
+	// NOTE Assuming there is a point. Danger...
+	geom = append(geom, toPoint(r.Points))
+
+	// If there are polygons, build them for the insertion
+	if len(r.Geometry) > 0 {
+		geom = append(geom, toMultiPolygon(r.Geometry))
+	}
+
+	if len(geom) > 0 {
+		coll = "GEOMETRYCOLLECTION(" + strings.Join(geom, ",") + ")"
+	}
+
+	return coll
 }
 
 // If this is the latest report for an incident, update the incident's current_from column with this report's pubdate

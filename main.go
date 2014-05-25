@@ -6,14 +6,12 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"github.com/kpawlik/geojson"
 	_ "github.com/lib/pq"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -275,23 +273,11 @@ func toMultiPolygon(shapes []string) string {
 }
 
 // Converts a string representation of a coordinate to a GeoJSON representation
-func toGeoJsonPoints(s string) (string, error) {
-	// p is in form of "-33.6097 150.0216"
-	ll := strings.Split(s, " ")
+func toPoint(s string) string {
+	// s is in form of "-33.6097 150.0216"
+	pt := strings.Split(s, " ")
 
-	flLat, _ := strconv.ParseFloat(ll[0], 64)
-	flLng, _ := strconv.ParseFloat(ll[1], 64)
-
-	lat := geojson.Coord(flLat)
-	lng := geojson.Coord(flLng)
-
-	c := geojson.Coordinate{lng, lat}
-
-	p := geojson.NewPoint(c)
-
-	gj, _ := json.Marshal(p)
-
-	return string(gj), nil
+	return "POINT(" + pt[1] + " " + pt[0] + ")"
 }
 
 func reportFromItem(i Item) (report Report, err error) {
@@ -309,8 +295,7 @@ func reportFromItem(i Item) (report Report, err error) {
 	report.Category = i.Category
 	report.Description = i.Description
 
-	// Geometries need to be converted into GeoJSON representations for easy PostGIS insertion
-	report.Points, _ = toGeoJsonPoints(i.Points[0]) // NOTE I'm using the 1st item here, assuming we'll only have 1 point per-item
+	report.Points = i.Points[0] // NOTE I'm using the 1st item here, assuming we'll only have 1 point per-item
 
 	report.Geometry = i.Polygons
 
