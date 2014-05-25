@@ -232,6 +232,49 @@ func incidentFromItem(i Item) (incident Incident, err error) {
 	return
 }
 
+// Takes an array of GeoRSS polygon strings and returns a MultiPolygon representation for insertion into the database
+func toMultiPolygon(shapes []string) string {
+	str := "MULTIPOLYGON"
+	pols := make([]string, len(shapes))
+
+	// For each member string
+	for n, v := range shapes {
+		s := strings.Split(v, " ") // Split by space
+		var pts [][]string         // To hold the points
+
+		// Build a collection of points, grouped by pair
+		for i, p := range s {
+			if i%2 == 0 {
+				// Make a new slice for this item and the next
+				pt := make([]string, 2)
+				pt[1] = p
+				pts = append(pts, pt)
+			} else {
+				// Find the most recent slice and add this item
+				pts[len(pts)-1][0] = p
+			}
+		}
+
+		// For holding the each pt above as a string joined by a space
+		strs := make([]string, len(pts))
+
+		// For each pair of members
+		for i, pt := range pts {
+			// Join by a space as a string
+			strs[i] = strings.Join(pt, " ")
+		}
+
+		// Join by commas and surround by parentheses
+		pols[n] = "((" + strings.Join(strs, ", ") + "))"
+	}
+
+	// Join all by commas and surround by parentheses
+	str = str + "(" + strings.Join(pols, ",") + ")"
+
+	return str
+}
+
+// Converts a string representation of a coordinate to a GeoJSON representation
 func toGeoJsonPoints(s string) (string, error) {
 	// p is in form of "-33.6097 150.0216"
 	ll := strings.Split(s, " ")
@@ -269,7 +312,7 @@ func reportFromItem(i Item) (report Report, err error) {
 	// Geometries need to be converted into GeoJSON representations for easy PostGIS insertion
 	report.Points, _ = toGeoJsonPoints(i.Points[0]) // NOTE I'm using the 1st item here, assuming we'll only have 1 point per-item
 
-	// report.Polygons = i.Polygons
+	report.Geometry = i.Polygons
 
 	// Pubdate should be of type time
 	pubdateFormat := "Mon, 2 Jan 2006 15:04:05 GMT"
