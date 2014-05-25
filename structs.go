@@ -213,7 +213,7 @@ func (r *Report) Insert() error {
 	}
 	stmt, err := db.Prepare(`INSERT INTO
     reports(incident_uuid, hash, guid, title, link, category, pubdate, description, updated, alert_level, location, council_area, status, fire_type, fire, size, responsible_agency, extra, geometry, point)
-    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, ST_GeomFromText($19, 4326), ST_GeomFromText($20))
+    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, ST_GeomFromText($19, 4326), ST_GeomFromText($20, 4326))
     RETURNING uuid`)
 	if err != nil {
 		return err
