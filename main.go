@@ -40,7 +40,7 @@ func ImportFromFile(path string) error {
 func ImportFromURI(u *url.URL) error {
 	res, err := goreq.Request{
 		Uri:     u.String(),
-		Timeout: 3 * time.Second,
+		Timeout: 10 * time.Second,
 	}.Do()
 	if err != nil {
 		return err
