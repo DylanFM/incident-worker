@@ -1,0 +1,14 @@
+{
+	"ImportPath": "github.com/dylanfm/incidentworker",
+	"GoVersion": "go1.2",
+	"Deps": [
+		{
+			"ImportPath": "github.com/franela/goreq",
+			"Rev": "1a5ea3355b115aac4fd5fb656d1cc80a205db4d6"
+		},
+		{
+			"ImportPath": "github.com/lib/pq",
+			"Rev": "78760269eebe5e70b28bb94bff676d7b28df275d"
+		}
+	]
+}
