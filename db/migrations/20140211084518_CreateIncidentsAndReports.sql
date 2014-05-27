@@ -28,7 +28,7 @@ CREATE TABLE reports (
   responsible_agency text,
   extra text,
   point geography(Point,4326),
-  geometry geometry,
+  geometry geometry(Geometry,4326),
   created_at timestamp with time zone DEFAULT timezone('UTC', NOW()) NOT NULL,
   updated_at timestamp with time zone DEFAULT timezone('UTC', NOW()) NOT NULL
 );
