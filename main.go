@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/franela/goreq"
 	_ "github.com/lib/pq"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -38,7 +38,10 @@ func ImportFromFile(path string) error {
 }
 
 func ImportFromURI(u *url.URL) error {
-	res, err := http.Get(u.String())
+	res, err := goreq.Request{
+		Uri:     u.String(),
+		Timeout: 3 * time.Second,
+	}.Do()
 	if err != nil {
 		return err
 	}
