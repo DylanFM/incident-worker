@@ -38,6 +38,9 @@ func ImportFromFile(path string) error {
 }
 
 func ImportFromURI(u *url.URL) error {
+	// General connection timeout
+	goreq.SetConnectTimeout(5 * time.Second)
+
 	res, err := goreq.Request{
 		Uri:     u.String(),
 		Timeout: 10 * time.Second,
