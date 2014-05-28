@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/codegangsta/cli"
 	"github.com/franela/goreq"
 	_ "github.com/lib/pq"
 	"io/ioutil"
@@ -330,14 +331,6 @@ func reportFromItem(i Item) (report Report, err error) {
 }
 
 func main() {
-	if len(os.Args) == 1 {
-		log.Panic("Specify a URL or file to import from")
-	}
-
-	loc := os.Args[1]
-
-	fmt.Printf("Importing from %s\n", loc)
-
 	// Open up a connection to the DB (well, just get the pool going)
 	var err error
 	db, err = sql.Open("postgres", os.Getenv("DATABASE_URL"))
@@ -346,30 +339,46 @@ func main() {
 	}
 	defer db.Close()
 
-	// Get the start count for incidents and reports
-	stInCount, _ := GetNumIncidents()
-	stCiCount, _ := GetNumCurrentIncidents()
-	stRpCount, _ := GetNumReports()
-
-	// Argument could be URL or path
-	if u, urlErr := url.Parse(loc); urlErr == nil {
-		if u.IsAbs() {
-			err = ImportFromURI(u)
-		} else {
-			err = ImportFromFile(loc)
+	app := cli.NewApp()
+	app.Name = "incidentworker"
+	app.Version = "0.1.0"
+	app.Usage = "Import data from an RFS GeoRSS feed"
+	app.Action = func(c *cli.Context) {
+		if len(c.Args()) == 0 {
+			log.Fatal("Specify a URL or file to import from")
 		}
+		loc := c.Args()[0]
+
+		fmt.Printf("Importing from %s\n", loc)
+
+		// Get the start count for incidents and reports
+		stInCount, _ := GetNumIncidents()
+		stCiCount, _ := GetNumCurrentIncidents()
+		stRpCount, _ := GetNumReports()
+
+		var err error
+
+		// Argument could be URL or path
+		if u, urlErr := url.Parse(loc); urlErr == nil {
+			if u.IsAbs() {
+				err = ImportFromURI(u)
+			} else {
+				err = ImportFromFile(loc)
+			}
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Get the start count for incidents and reports
+		enInCount, _ := GetNumIncidents()
+		enCiCount, _ := GetNumCurrentIncidents()
+		enRpCount, _ := GetNumReports()
+
+		fmt.Printf("%d new incidents, %d total\n", enInCount-stInCount, enInCount)
+		fmt.Printf("%d new reports, %d total\n", enRpCount-stRpCount, enRpCount)
+		fmt.Printf("%d current incidents, %d change\n", enCiCount, enCiCount-stCiCount)
 	}
 
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Get the start count for incidents and reports
-	enInCount, _ := GetNumIncidents()
-	enCiCount, _ := GetNumCurrentIncidents()
-	enRpCount, _ := GetNumReports()
-
-	fmt.Printf("%d new incidents, %d total\n", enInCount-stInCount, enInCount)
-	fmt.Printf("%d new reports, %d total\n", enRpCount-stRpCount, enRpCount)
-	fmt.Printf("%d current incidents, %d change\n", enCiCount, enCiCount-stCiCount)
+	app.Run(os.Args)
 }
