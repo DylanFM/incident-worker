@@ -379,11 +379,11 @@ func main() {
 				log.Fatal(err)
 			}
 
-			fmt.Printf("Importing from %s every %d seconds\n", loc, sec)
+			log.Printf("Importing from %s every %d seconds\n", loc, sec)
 
 			ticker := time.NewTicker(time.Second * time.Duration(sec))
 			for t := range ticker.C {
-				fmt.Printf("Importing at %v\n", t)
+				log.Printf("Importing at %v\n", t)
 
 				err = ImportFrom(loc)
 				if err != nil {
@@ -392,7 +392,7 @@ func main() {
 			}
 		} else {
 			// No, we're just doing this once
-			fmt.Printf("Importing from %s\n", loc)
+			log.Printf("Importing from %s\n", loc)
 
 			err := ImportFrom(loc)
 			if err != nil {
