@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -61,6 +62,25 @@ func ImportFromURI(u *url.URL) error {
 		return err
 	}
 
+	return nil
+}
+
+// Imports from loc. Loc being a path or a URL
+func ImportFrom(loc string) error {
+	var err error
+	// Argument could be URL or path
+	if u, urlErr := url.Parse(loc); urlErr == nil {
+		if u.IsAbs() {
+			err = ImportFromURI(u)
+		} else {
+			err = ImportFromFile(loc)
+		}
+		if err != nil {
+			return err
+		}
+	} else {
+		return urlErr
+	}
 	return nil
 }
 
@@ -343,41 +363,42 @@ func main() {
 	app.Name = "incidentworker"
 	app.Version = "0.1.0"
 	app.Usage = "Import data from an RFS GeoRSS feed"
+	app.Flags = []cli.Flag{
+		cli.StringFlag{"tick,t", "", "import from URL every n seconds (e.g 3600)"},
+	}
 	app.Action = func(c *cli.Context) {
 		if len(c.Args()) == 0 {
 			log.Fatal("Specify a URL or file to import from")
 		}
 		loc := c.Args()[0]
 
-		fmt.Printf("Importing from %s\n", loc)
+		// We may be importing at an interval
+		if len(c.String("tick")) > 0 {
+			sec, err := strconv.Atoi(c.String("tick"))
+			if err != nil {
+				log.Fatal(err)
+			}
 
-		// Get the start count for incidents and reports
-		stInCount, _ := GetNumIncidents()
-		stCiCount, _ := GetNumCurrentIncidents()
-		stRpCount, _ := GetNumReports()
+			fmt.Printf("Importing from %s every %d seconds\n", loc, sec)
 
-		var err error
+			ticker := time.NewTicker(time.Second * time.Duration(sec))
+			for t := range ticker.C {
+				fmt.Printf("Importing at %v\n", t)
 
-		// Argument could be URL or path
-		if u, urlErr := url.Parse(loc); urlErr == nil {
-			if u.IsAbs() {
-				err = ImportFromURI(u)
-			} else {
-				err = ImportFromFile(loc)
+				err = ImportFrom(loc)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		} else {
+			// No, we're just doing this once
+			fmt.Printf("Importing from %s\n", loc)
+
+			err := ImportFrom(loc)
+			if err != nil {
+				log.Fatal(err)
 			}
 		}
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Get the start count for incidents and reports
-		enInCount, _ := GetNumIncidents()
-		enCiCount, _ := GetNumCurrentIncidents()
-		enRpCount, _ := GetNumReports()
-
-		fmt.Printf("%d new incidents, %d total\n", enInCount-stInCount, enInCount)
-		fmt.Printf("%d new reports, %d total\n", enRpCount-stRpCount, enRpCount)
-		fmt.Printf("%d current incidents, %d change\n", enCiCount, enCiCount-stCiCount)
 	}
 
 	app.Run(os.Args)
