@@ -9,6 +9,7 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/franela/goreq"
 	_ "github.com/lib/pq"
+	"github.com/rcrowley/go-librato"
 	"io/ioutil"
 	"log"
 	"net/url"
@@ -68,6 +69,10 @@ func ImportFromURI(u *url.URL) error {
 // Imports from loc. Loc being a path or a URL
 func ImportFrom(loc string) error {
 	var err error
+
+	// We log metrics at the end, so we need to know current details before db changes
+	stCiCount, _ := GetNumCurrentIncidents()
+
 	// Argument could be URL or path
 	if u, urlErr := url.Parse(loc); urlErr == nil {
 		if u.IsAbs() {
@@ -81,6 +86,51 @@ func ImportFrom(loc string) error {
 	} else {
 		return urlErr
 	}
+
+	// If we're here, things have been success. Log stats to Librato
+	_ = logMetrics(stCiCount)
+
+	return nil
+}
+
+// Logs metrics to Librato
+func logMetrics(currentIncidents int) error {
+	// Configure librato agent... if the config is available
+	user := os.Getenv("LIBRATO_USER")
+	token := os.Getenv("LIBRATO_TOKEN")
+	source := os.Getenv("LIBRATO_SOURCE")
+
+	// If configs are missing, bail
+	if len(user) == 0 || len(token) == 0 { // source isn't required
+		return nil
+	}
+
+	m := librato.NewSimpleMetrics(user, token, source)
+	defer m.Wait()
+	defer m.Close()
+
+	// - [Counter] Total number of reports
+	numReports, _ := GetNumReports()
+	// - [Counter] Total number of incidents
+	numIncidents, _ := GetNumIncidents()
+	// - [Gauge] Number of current incidents
+	numCurrentIncidents, _ := GetNumCurrentIncidents()
+	// - [Gauge] Change in current incidents
+	changeCurrentIncidents := numCurrentIncidents - currentIncidents
+
+	// Sent to Librato
+	rep := m.GetCounter("reports.total")
+	rep <- int64(numReports)
+
+	inc := m.GetCounter("incidents.total")
+	inc <- int64(numIncidents)
+
+	cuInc := m.GetGauge("current_incidents.total")
+	cuInc <- int64(numCurrentIncidents)
+
+	chCuInc := m.GetGauge("current_incidents.change")
+	chCuInc <- int64(changeCurrentIncidents)
+
 	return nil
 }
 
@@ -160,51 +210,6 @@ func UpdateCurrentIncidents(incidents []Incident) error {
 	// Now the only incidents marked as current in the database will be from this update
 
 	return nil
-}
-
-func GetNumCurrentIncidents() (int, error) {
-	stmt, err := db.Prepare(`SELECT COUNT(*) FROM incidents WHERE current = true`)
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
-
-	var count int
-	err = stmt.QueryRow().Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-func GetNumIncidents() (int, error) {
-	stmt, err := db.Prepare(`SELECT COUNT(*) FROM incidents`)
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
-
-	var count int
-	err = stmt.QueryRow().Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-func GetNumReports() (int, error) {
-	stmt, err := db.Prepare(`SELECT COUNT(*) FROM reports`)
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
-
-	var count int
-	err = stmt.QueryRow().Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
 }
 
 // This function takes an integer that should be an RFS Id for an Incident
@@ -348,6 +353,54 @@ func reportFromItem(i Item) (report Report, err error) {
 	report.Extra = details["extra"]
 
 	return
+}
+
+//
+// Fetch counts for metrics
+//
+func GetNumCurrentIncidents() (int, error) {
+	stmt, err := db.Prepare(`SELECT COUNT(*) FROM incidents WHERE current = true`)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	var count int
+	err = stmt.QueryRow().Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func GetNumIncidents() (int, error) {
+	stmt, err := db.Prepare(`SELECT COUNT(*) FROM incidents`)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	var count int
+	err = stmt.QueryRow().Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func GetNumReports() (int, error) {
+	stmt, err := db.Prepare(`SELECT COUNT(*) FROM reports`)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	var count int
+	err = stmt.QueryRow().Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func main() {
