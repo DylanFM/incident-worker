@@ -121,15 +121,19 @@ func logMetrics(currentIncidents int) error {
 	// Sent to Librato
 	rep := m.GetCounter("reports.total")
 	rep <- int64(numReports)
+	fmt.Printf("Librato reports.total <- %d\n", int64(numReports))
 
 	inc := m.GetCounter("incidents.total")
 	inc <- int64(numIncidents)
+	fmt.Printf("Librato incidents.total <- %d\n", int64(numIncidents))
 
 	cuInc := m.GetGauge("current_incidents.total")
 	cuInc <- int64(numCurrentIncidents)
+	fmt.Printf("Librato current_incidents.total <- %d\n", int64(numCurrentIncidents))
 
 	chCuInc := m.GetGauge("current_incidents.change")
 	chCuInc <- int64(changeCurrentIncidents)
+	fmt.Printf("Librato current_incidents.change <- %d\n", int64(changeCurrentIncidents))
 
 	return nil
 }
