@@ -43,6 +43,16 @@ $ incidentworker /path/to/georss.xml
 $ incidentworker http://www.rfs.nsw.gov.au/feeds/majorIncidents.xml
 ```
 
+### Import at an interval
+
+To perform an import repeatedly at an interval, include the `--tick` option with the number of seconds between each import. This is what I'm using on Heroku to perform regular imports (refer to the Procfile).
+
+This command will import the GeoRSS feed every 5 minutes:
+
+```
+$ incidentworker --tick 300 http://www.rfs.nsw.gov.au/feeds/majorIncidents.xml
+```
+
 ### Import a collection of files
 
 I use the following to import the data I've [collected](https://github.com/dylanfm/major-incidents-data). To import 5 months of hourly GeoRSS feeds currently takes about 5 minutes.
@@ -50,20 +60,3 @@ I use the following to import the data I've [collected](https://github.com/dylan
 ```
 for file in /path/to/major-incidents-data/*.xml; do ./incidentworker $file; done
 ```
-
-
-
-### Output
-
-`incidentworker` generates the following output:
-
-```
-Importing from http://www.rfs.nsw.gov.au/feeds/majorIncidents.xml
-1 new incidents, 3919 total
-2 new reports, 18143 total
-7 current incidents, -1 change
-```
-
-* The 1st line shows the number of new incidents encountered in this import, followed by the total number of incidents in the database.
-* The 2nd line shows the number of new reports and the total number of reports in the database.
-* Incidents can be current or not. The final line shows how many current incidents there are, followed by an indication of how this has changed since the previous update. e.g. in this case, there is now 1 less current incident.
