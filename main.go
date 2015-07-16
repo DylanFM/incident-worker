@@ -4,11 +4,11 @@ import (
 	"crypto/sha1"
 	"database/sql"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
 	"github.com/codegangsta/cli"
 	"github.com/franela/goreq"
 	_ "github.com/lib/pq"
+	"github.com/paulmach/go.geojson"
 	"github.com/rcrowley/go-librato"
 	"io/ioutil"
 	"log"
@@ -32,7 +32,7 @@ func ImportFromFile(path string) error {
 		return err
 	}
 
-	err = ImportXml(contents)
+	err = ImportGeoJSON(contents)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func ImportFromURI(u *url.URL) error {
 		return err
 	}
 
-	err = ImportXml(contents)
+	err = ImportGeoJSON(contents)
 	if err != nil {
 		return err
 	}
@@ -138,36 +138,41 @@ func logMetrics(currentIncidents int) error {
 	return nil
 }
 
-// Takes a GeoRSS feed and imports features and reports from the XML
-func ImportXml(data []byte) error {
+// Takes a GeoJSON feed and imports features and reports from the contents
+func ImportGeoJSON(data []byte) error {
 
-	// We've got an XML file
+	// We have GeoJSON!
 	// The file contains some metadata and a collection of items
 	// We want to get each of the items into an array
-	var feed Feed
-	err := xml.Unmarshal(data, &feed)
+	fc, err := geojson.UnmarshalFeatureCollection(data)
 	if err != nil {
 		return err
 	}
 
-	// For the incidents in the unmarshalled XML feed
+	// For the incidents in our new data
 	var incidents []Incident
 
-	// Feed each item to a worker which turns the items into incident/report structs
-	for _, item := range feed.Channel.Items {
+	// Feed each feature to a worker which turns them into incident/report structs
+	for _, f := range fc.Features {
 		incidentChan := make(chan Incident)
 
-		go func(item Item) {
-			incident, _ := incidentFromItem(item)
+		go func(f *geojson.Feature) {
+			i, err := incidentFromFeature(f)
+			if err != nil {
+				fmt.Printf("\nError parsing incident %v\n", err)
+			}
 
-			incident.Import()
+			err = i.Import()
+			if err != nil {
+				fmt.Printf("\nError importing incident %v\n", err)
+			}
 
-			incidentChan <- incident
-		}(item)
+			incidentChan <- i
+		}(f)
 
-		incident := <-incidentChan
+		i := <-incidentChan
 
-		incidents = append(incidents, incident)
+		incidents = append(incidents, i)
 	}
 
 	// Update current incidents to the latest import
@@ -193,7 +198,7 @@ func UpdateCurrentIncidents(incidents []Incident) error {
 
 	// Having trouble building the variable length IN clause for this query
 	ins := strings.Split(strings.Repeat("$", len(args)), "")
-	for i, _ := range ins {
+	for i := range ins {
 		ins[i] = fmt.Sprintf("$%d", i+1)
 	}
 	// We've got a slice of ["$1", "$2" ...]
@@ -254,109 +259,72 @@ func GetReportUUIDForHash(hash string) (string, error) {
 	return uuid, nil
 }
 
-func incidentFromItem(i Item) (incident Incident, err error) {
-	incident = Incident{}
+func incidentFromFeature(f *geojson.Feature) (Incident, error) {
+	i := Incident{}
 
-	report, _ := reportFromItem(i) // The 1st report
-	incident.Reports = append(incident.Reports, report)
-
-	incident.RFSId = report.Id()
-	incident.FirstSeen = report.Pubdate // Used when setting the initial tstzrange
-
-	return
-}
-
-// Takes an array of GeoRSS polygon strings and returns a MultiPolygon representation for insertion into the database
-func toMultiPolygon(shapes []string) string {
-	str := "MULTIPOLYGON"
-	pols := make([]string, len(shapes))
-
-	// For each member string
-	for n, v := range shapes {
-		s := strings.Split(v, " ") // Split by space
-		var pts [][]string         // To hold the points
-
-		// Build a collection of points, grouped by pair
-		for i, p := range s {
-			if i%2 == 0 {
-				// Make a new slice for this item and the next
-				pt := make([]string, 2)
-				pt[1] = p
-				pts = append(pts, pt)
-			} else {
-				// Find the most recent slice and add this item
-				pts[len(pts)-1][0] = p
-			}
-		}
-
-		// For holding the each pt above as a string joined by a space
-		strs := make([]string, len(pts))
-
-		// For each pair of members
-		for i, pt := range pts {
-			// Join by a space as a string
-			strs[i] = strings.Join(pt, " ")
-		}
-
-		// Join by commas and surround by parentheses
-		pols[n] = "((" + strings.Join(strs, ", ") + "))"
+	r, err := reportFromFeature(f) // The 1st report
+	if err != nil {
+		return i, err
 	}
+	i.Reports = append(i.Reports, r)
 
-	// Join all by commas and surround by parentheses
-	str = str + "(" + strings.Join(pols, ",") + ")"
+	i.RFSId = r.Id()
+	i.FirstSeen = r.Pubdate // Used when setting the initial tstzrange
 
-	return str
+	return i, nil
 }
 
-// Converts a string representation of a coordinate to a GeoJSON representation
-func toPoint(s string) string {
-	// s is in form of "-33.6097 150.0216"
-	pt := strings.Split(s, " ")
-
-	return "POINT(" + pt[1] + " " + pt[0] + ")"
-}
-
-func reportFromItem(i Item) (report Report, err error) {
-	report = Report{}
+func reportFromFeature(f *geojson.Feature) (Report, error) {
+	r := Report{}
+	var err error
 
 	// Generate hash of json representation of item
-	s, _ := json.Marshal(i)
+	s, _ := json.Marshal(f)
 	h := sha1.New()
 	h.Write([]byte(s))
-	report.Hash = fmt.Sprintf("%x", h.Sum(nil))
+	r.Hash = fmt.Sprintf("%x", h.Sum(nil))
 
-	report.Guid = i.Guid
-	report.Title = i.Title
-	report.Link = i.Link
-	report.Category = i.Category
-	report.Description = i.Description
+	r.Guid, _ = f.PropertyString("guid")
+	r.Title, _ = f.PropertyString("title")
+	r.Link, _ = f.PropertyString("link")
+	r.Category, _ = f.PropertyString("category")
+	r.Description, _ = f.PropertyString("description")
 
-	report.Points = i.Points[0] // NOTE I'm using the 1st item here, assuming we'll only have 1 point per-item
-
-	report.Geometry = i.Polygons
+	r.Geometry = f.Geometry
 
 	// Pubdate should be of type time
-	pubdateFormat := "Mon, 2 Jan 2006 15:04:05 GMT"
-	report.Pubdate, _ = time.Parse(pubdateFormat, i.Pubdate)
+	pubdateFormat := "2006/01/02 15:04:05+00"
+	dateStr, _ := f.PropertyString("pubDate")
+	r.Pubdate, err = time.Parse(pubdateFormat, dateStr)
+	if err != nil {
+		return r, err
+	}
 
-	details, err := report.parsedDescription()
+	details, err := r.parsedDescription()
+	if err != nil {
+		return r, err
+	}
+
 	// Pull expected details into the struct as fields
 
 	loc, _ := time.LoadLocation("Australia/Sydney")
 	updatedFormat := "2 Jan 2006 15:04"
-	report.Updated, _ = time.ParseInLocation(updatedFormat, details["updated"], loc) // Convert to time
+	r.Updated, err = time.ParseInLocation(updatedFormat, details["updated"], loc) // Convert to time
+	if err != nil {
+		return r, err
+	}
 
-	report.AlertLevel = details["alert_level"]
-	report.Location = details["location"]
-	report.CouncilArea = details["council_area"]
-	report.Status = details["status"]
-	report.FireType = details["type"] // type is reserved, so use fire_type
-	report.Fire = details["fire"] == "Yes"
-	report.Size = details["size"]
-	report.ResponsibleAgency = details["responsible_agency"]
-	report.Extra = details["extra"]
+	r.AlertLevel = details["alert_level"]
+	r.Location = details["location"]
+	r.CouncilArea = details["council_area"]
+	r.Status = details["status"]
+	r.FireType = details["type"] // type is reserved, so use fire_type
+	r.Fire = details["fire"] == "Yes"
+	r.Size = details["size"]
+	r.ResponsibleAgency = details["responsible_agency"]
+	r.Extra = details["extra"]
 
-	return
+	return r, nil
 }
 
 //
