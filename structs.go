@@ -3,40 +3,12 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"github.com/paulmach/go.geojson"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
-
-type Feed struct {
-	Channel Channel `xml:"channel"`
-}
-
-type Channel struct {
-	Items []Item `xml:"item"`
-}
-
-// <item>
-//  <title>Bonfire Hill</title>
-//  <link>...</link>
-//  <category>Advice</category>
-//  <guid isPermaLink="false">tag:www.rfs.nsw.gov.au,2013-10-30:81726</guid>
-//  <pubDate>Wed, 30 Oct 2013 02:55:00 GMT</pubDate>
-//  <description>...</description>
-//  <georss:point>-33.6097 150.0216</georss:point>
-// </item>
-type Item struct {
-	// Raw []byte `xml:"innerxml"`
-	Title       string   `xml:"title"`
-	Link        string   `xml:"link"`
-	Category    string   `xml:"category"`
-	Guid        string   `xml:"guid"`
-	Pubdate     string   `xml:"pubDate"`
-	Description string   `xml:"description"`
-	Points      []string `xml:"point"`
-	Polygons    []string `xml:"polygon"`
-}
 
 type Incident struct {
 	UUID      string
@@ -82,17 +54,16 @@ func (i *Incident) Import() error {
 		if err != sql.ErrNoRows {
 			// The error isn't that we don't have a record
 			return err
-		} else {
-			// We don't have this report
-			err = r.Insert()
-			if err != nil {
-				return err
-			}
-			// Possibly set this report as the latest
-			err = r.SetPubdateAsIncidentCurrentFromUpper()
-			if err != nil {
-				return err
-			}
+		}
+		// We don't have this report
+		err = r.Insert()
+		if err != nil {
+			return err
+		}
+		// Possibly set this report as the latest
+		err = r.SetPubdateAsIncidentCurrentFromUpper()
+		if err != nil {
+			return err
 		}
 	}
 
@@ -161,7 +132,7 @@ type Report struct {
 	ResponsibleAgency string
 	Extra             string
 	Points            string // Just the 1st point... maybe we add support for multiple points at some point
-	Geometry          []string
+	Geometry          *geojson.Geometry
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 }
@@ -192,7 +163,7 @@ func (r *Report) parsedDescription() (map[string]string, error) {
 				label := strings.ToLower(m[1])
 				// Maybe unecessary, but I'd like to have no whitespace in the label
 				label = whitespaceRe.ReplaceAllString(label, "_")
-				details[label] = m[2]
+				details[label] = strings.Trim(m[2], " ")
 			}
 		} else {
 			// Well, there isn't a match which means there's some random text at the end.
@@ -200,6 +171,13 @@ func (r *Report) parsedDescription() (map[string]string, error) {
 			// return nil, fmt.Errorf("No matches %d - %s (from %s)", len(r), r, v)
 			// Store as extra
 			details["extra"] = v
+		}
+	}
+
+	// If the updated at part has an <a> tag in it, take the first section and drop the rest
+	if u, exists := details["updated"]; exists {
+		if strings.Contains(u, "<a") {
+			details["updated"] = strings.Trim(strings.Split(u, "<a")[0], " ")
 		}
 	}
 
@@ -211,41 +189,27 @@ func (r *Report) Insert() error {
 	if r.UUID != "" {
 		return fmt.Errorf("Attempting to insert report that already has a UUID, %s", r.UUID)
 	}
+
+	// Turn the geometry into a JSON string for Postgis
+	geom, err := r.Geometry.MarshalJSON()
+	if err != nil {
+		return err
+	}
+
 	stmt, err := db.Prepare(`INSERT INTO
-    reports(incident_uuid, hash, guid, title, link, category, pubdate, description, updated, alert_level, location, council_area, status, fire_type, fire, size, responsible_agency, extra, geometry, point)
-    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, ST_GeomFromText($19, 4326), ST_GeomFromText($20, 4326))
+    reports(incident_uuid, hash, guid, title, link, category, pubdate, description, updated, alert_level, location, council_area, status, fire_type, fire, size, responsible_agency, extra, geometry)
+    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, ST_SetSRID(ST_GeomFromGeoJSON($19), 4326))
     RETURNING uuid`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRow(r.IncidentUUID, r.Hash, r.Guid, r.Title, r.Link, r.Category, r.Pubdate.UTC().Format(time.RFC3339), r.Description, r.Updated.UTC().Format(time.RFC3339), r.AlertLevel, r.Location, r.CouncilArea, r.Status, r.FireType, r.Fire, r.Size, r.ResponsibleAgency, r.Extra, r.GeometryCollection(), toPoint(r.Points)).Scan(&r.UUID)
+	err = stmt.QueryRow(r.IncidentUUID, r.Hash, r.Guid, r.Title, r.Link, r.Category, r.Pubdate.UTC().Format(time.RFC3339), r.Description, r.Updated.UTC().Format(time.RFC3339), r.AlertLevel, r.Location, r.CouncilArea, r.Status, r.FireType, r.Fire, r.Size, r.ResponsibleAgency, r.Extra, geom).Scan(&r.UUID)
 	if err != nil {
 		return err
 	}
 	return nil
-}
-
-// Returns a Postgis text representation of the geometries for a given report
-// Unfortunately for now the resulting insertion will fail if the report has no points and no polygons
-func (r *Report) GeometryCollection() string {
-	var geom []string
-	var coll string
-
-	// NOTE Assuming there is a point. Danger...
-	geom = append(geom, toPoint(r.Points))
-
-	// If there are polygons, build them for the insertion
-	if len(r.Geometry) > 0 {
-		geom = append(geom, toMultiPolygon(r.Geometry))
-	}
-
-	if len(geom) > 0 {
-		coll = "GEOMETRYCOLLECTION(" + strings.Join(geom, ",") + ")"
-	}
-
-	return coll
 }
 
 // If this is the latest report for an incident, update the incident's current_from column with this report's pubdate
