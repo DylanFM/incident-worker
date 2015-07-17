@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"github.com/paulmach/go.geojson"
+	"github.com/dylanfm/incidentworker/Godeps/_workspace/src/github.com/paulmach/go.geojson"
 	"regexp"
 	"strconv"
 	"strings"

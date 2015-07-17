@@ -57,7 +57,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/lib/pq/oid"
+	"github.com/dylanfm/incidentworker/Godeps/_workspace/src/github.com/lib/pq/oid"
 	"io"
 	"net"
 	"os"

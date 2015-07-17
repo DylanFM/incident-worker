@@ -2,7 +2,7 @@ package cli_test
 
 import (
 	"fmt"
-	"github.com/codegangsta/cli"
+	"github.com/dylanfm/incidentworker/Godeps/_workspace/src/github.com/codegangsta/cli"
 	"os"
 	"testing"
 )
@@ -35,9 +35,9 @@ func ExampleAppHelp() {
 	}
 	app.Commands = []cli.Command{
 		{
-			Name: "describeit",
-			ShortName: "d",
-			Usage: "use it to see a description",
+			Name:        "describeit",
+			ShortName:   "d",
+			Usage:       "use it to see a description",
 			Description: "This is how we describe describeit the function",
 			Action: func(c *cli.Context) {
 				fmt.Printf("i like to describe things")

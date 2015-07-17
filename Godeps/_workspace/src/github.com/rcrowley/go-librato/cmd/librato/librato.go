@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"github.com/rcrowley/go-librato"
+	"github.com/dylanfm/incidentworker/Godeps/_workspace/src/github.com/rcrowley/go-librato"
 	"io"
 	"log"
 	"os"

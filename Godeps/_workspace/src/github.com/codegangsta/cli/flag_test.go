@@ -1,7 +1,7 @@
 package cli_test
 
 import (
-	"github.com/codegangsta/cli"
+	"github.com/dylanfm/incidentworker/Godeps/_workspace/src/github.com/codegangsta/cli"
 	"testing"
 )
 
