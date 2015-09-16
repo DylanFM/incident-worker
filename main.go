@@ -290,7 +290,7 @@ func reportFromFeature(f *geojson.Feature) (Report, error) {
 	r.Category, _ = f.PropertyString("category")
 	r.Description, _ = f.PropertyString("description")
 
-	r.Geometry = f.Geometry
+	r.Geometry = mergeNestedGeometryCollections(f.Geometry)
 
 	loc, _ := time.LoadLocation("Australia/Sydney")
 
@@ -326,6 +326,37 @@ func reportFromFeature(f *geojson.Feature) (Report, error) {
 	r.Extra = details["extra"]
 
 	return r, nil
+}
+
+// Receives a geometry. If it's a geometry collection, it merges any child geometry collections into it.
+// This is because PostGIS seems not to support GeoJSONning nested geometry collections.
+// It's valid GeoJSON though, and RFS have started doing it. However, I don't see the benefit in preserving that detail
+func mergeNestedGeometryCollections(geom *geojson.Geometry) *geojson.Geometry {
+	// If this isn't a geometry collection, ignore it
+	if !geom.IsCollection() {
+		return geom
+	}
+
+	newGeom := geojson.NewCollectionGeometry()
+
+	newGeom.Geometries = flattenGeometries(geom.Geometries)
+
+	return newGeom
+}
+
+// Takes a slice of geometries and flattens it so there are no nested geometry collections
+func flattenGeometries(geometries []*geojson.Geometry) []*geojson.Geometry {
+	flat := []*geojson.Geometry{}
+
+	for _, g := range geometries {
+		if g.IsCollection() {
+			flat = append(flat, flattenGeometries(g.Geometries)...)
+		} else {
+			flat = append(flat, g)
+		}
+	}
+
+	return flat
 }
 
 //
