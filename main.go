@@ -292,10 +292,12 @@ func reportFromFeature(f *geojson.Feature) (Report, error) {
 
 	r.Geometry = f.Geometry
 
+	loc, _ := time.LoadLocation("Australia/Sydney")
+
 	// Pubdate should be of type time
-	pubdateFormat := "2006/01/02 15:04:05+00"
+	pubdateFormat := "02/01/2006 3:04:05 PM"
 	dateStr, _ := f.PropertyString("pubDate")
-	r.Pubdate, err = time.Parse(pubdateFormat, dateStr)
+	r.Pubdate, err = time.ParseInLocation(pubdateFormat, dateStr, loc)
 	if err != nil {
 		return r, err
 	}
@@ -307,7 +309,6 @@ func reportFromFeature(f *geojson.Feature) (Report, error) {
 
 	// Pull expected details into the struct as fields
 
-	loc, _ := time.LoadLocation("Australia/Sydney")
 	updatedFormat := "2 Jan 2006 15:04"
 	r.Updated, err = time.ParseInLocation(updatedFormat, details["updated"], loc) // Convert to time
 	if err != nil {
