@@ -293,7 +293,7 @@ func reportFromFeature(f *geojson.Feature) (Report, error) {
 	r.Geometry = mergeNestedGeometryCollections(f.Geometry)
 
 	// Pubdate should be of type time
-	pubdateFormat := "02/01/2006 3:04:05 PM"
+	pubdateFormat := "2/01/2006 3:04:05 PM"
 	dateStr, _ := f.PropertyString("pubDate")
 	r.Pubdate, err = time.Parse(pubdateFormat, dateStr)
 	if err != nil {
