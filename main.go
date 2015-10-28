@@ -308,7 +308,7 @@ func reportFromFeature(f *geojson.Feature) (Report, error) {
 	// Pull expected details into the struct as fields
 
 	loc, _ := time.LoadLocation("Australia/Sydney")
-	updatedFormat := "2 Jan 2006 15:04"
+	updatedFormat := "Mon, 2 Jan 2006 15:04:05 GMT"
 	r.Updated, err = time.ParseInLocation(updatedFormat, details["updated"], loc) // Convert to time
 	if err != nil {
 		return r, err
