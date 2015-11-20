@@ -138,8 +138,8 @@ type Report struct {
 }
 
 func (r *Report) Id() int {
-	// GUID is a URL and the ID should be at the end
-	s := strings.Split(r.Guid, "/")
+	// Take the integer at the end of the Guid to use as the Id
+	s := strings.Split(r.Guid, ":")
 	id, _ := strconv.Atoi(s[len(s)-1])
 	return id
 }
